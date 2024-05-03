@@ -15,6 +15,7 @@ import java.io.*;
 import java.util.Base64;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.function.Consumer;
 
 public class Server {
     static final Logger log = LoggerFactory.getLogger(Server.class);
@@ -83,6 +84,70 @@ public class Server {
     }
 
     void getUser(Context ctx) {
+        user(ctx, user -> ctx.json(user.json));
+    }
+
+    void createUser(Context ctx) {
+        try {
+            var json = (JSONObject)parser.parse(ctx.body());
+            var login = (String)json.get("login");
+            if (users.get(login) != null) {
+                ctx.status(409);
+                return;
+            }
+            users.put(login, new User(json));
+            ctx.status(201);
+        } catch (ParseException e) {
+            ctx.status(400);
+        }
+    }
+
+    void updateUser(Context ctx) {
+        user(ctx, user -> {
+            try {
+                var json = (JSONObject)parser.parse(ctx.body());
+                json.putIfAbsent("is_admin", user.isAdmin);
+                json.putIfAbsent("login", user.login);
+                json.putIfAbsent("country", user.country);
+                users.put(user.login, new User(json));
+            } catch (ParseException e) {
+                ctx.status(400);
+            }
+        });
+    }
+
+    void block(Context ctx) {}
+    void unblock(Context ctx) {}
+
+    void blockUser(Context ctx) {
+        admin(ctx, () -> {
+            var login = ctx.pathParam("login");
+            var user = users.get(login);
+            if (user == null) {
+                ctx.status(404);
+                return;
+            }
+            if (!blacklisted.add(login)) {
+                ctx.status(409);
+                return;
+            }
+            ctx.status(201);
+        });
+    }
+
+    void unblockUser(Context ctx) {
+        admin(ctx, () -> {
+            var login = ctx.pathParam("login");
+            var user = users.get(login);
+            if (user == null || !blacklisted.remove(login)) {
+                ctx.status(404);
+                return;
+            }
+            ctx.status(204);
+        });
+    }
+
+    void user(Context ctx, Consumer<User> operation) {
         try {
             DecodedJWT jwt = JWT.require(hs256).build().verify(ctx.header("X-API-Key"));
             var json = (JSONObject)parser.parse(new String(Base64.getDecoder().decode(jwt.getPayload())));
@@ -91,23 +156,13 @@ public class Server {
                 ctx.status(403);
                 return;
             }
-            ctx.contentType(ContentType.APPLICATION_JSON);
-            ctx.result(user.json);
+            operation.accept(user);
         } catch (JWTVerificationException | ParseException e) {
             ctx.status(403);
         }
     }
 
-    void createUser(Context ctx) {
-    }
-
-    void updateUser(Context ctx) {
-    }
-
-    void block(Context ctx) {}
-    void unblock(Context ctx) {}
-
-    void blockUser(Context ctx) {
+    void admin(Context ctx, Runnable operation) {
         try {
             DecodedJWT jwt = JWT.require(hs256).build().verify(ctx.header("X-API-Key"));
             var json = (JSONObject)parser.parse(new String(Base64.getDecoder().decode(jwt.getPayload())));
@@ -117,40 +172,7 @@ public class Server {
                 ctx.status(403);
                 return;
             }
-            var login = ctx.pathParam("login");
-            var user = users.get(login);
-            if (user == null) {
-                ctx.status(404);
-                return;
-            }
-            if (blacklisted.contains(login)) {
-                ctx.status(409);
-                return;
-            }
-            blacklisted.add(login);
-            ctx.status(201);
-        } catch (JWTVerificationException | ParseException e) {
-            ctx.status(403);
-        }
-    }
-
-    void unblockUser(Context ctx) {
-        try {
-            DecodedJWT jwt = JWT.require(hs256).build().verify(ctx.header("X-API-Key"));
-            var json = (JSONObject)parser.parse(new String(Base64.getDecoder().decode(jwt.getPayload())));
-            var adminLogin = (String)json.get("login");
-            var admin = users.get(adminLogin);
-            if (admin == null || !admin.isAdmin || blacklisted.contains(adminLogin)) {
-                ctx.status(403);
-                return;
-            }
-            var login = ctx.pathParam("login");
-            var user = users.get(login);
-            if (user == null || !blacklisted.remove(login)) {
-                ctx.status(404);
-                return;
-            }
-            ctx.status(204);
+            operation.run();
         } catch (JWTVerificationException | ParseException e) {
             ctx.status(403);
         }
