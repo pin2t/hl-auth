@@ -8,6 +8,10 @@ public class Subnets {
         return false;
     }
 
+    boolean contains(long ip, int mask) {
+        return false;
+    }
+
     void block(long ip, int mask) {
 
     }

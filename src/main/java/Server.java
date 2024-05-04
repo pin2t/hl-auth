@@ -50,7 +50,7 @@ public class Server {
         });
         log.info(String.format("Loaded %d users from %s in %.2f s", users.users.size(), source, (System.nanoTime() - started) / 1000000000.));
         log.info("starting...");
-        Javalin.create(config -> config.useVirtualThreads = true)
+        Javalin.create(config -> {}/*config.useVirtualThreads = true*/)
             .post("/auth", this::auth)
             .get("/user", this::getUser)
             .put("/user", this::createUser)
@@ -107,6 +107,7 @@ public class Server {
                 json.putIfAbsent("is_admin", user.isAdmin);
                 json.putIfAbsent("login", user.login);
                 json.putIfAbsent("country", user.country);
+                json.putIfAbsent("password", user.password);
                 users.put(user.login, new User(json));
             } catch (ParseException e) {
                 ctx.status(400);
@@ -114,8 +115,31 @@ public class Server {
         });
     }
 
-    void block(Context ctx) {}
-    void unblock(Context ctx) {}
+    void block(Context ctx) {
+        admin(ctx, () -> {
+            var ip = ip(ctx.pathParam("ip"));
+            var mask = Integer.parseInt(ctx.pathParam("mask"));
+            if (blacklistedIPs.contains(ip, mask)) {
+                ctx.status(409);
+                return;
+            }
+            blacklistedIPs.block(ip, mask);
+            ctx.status(201);
+        });
+    }
+
+    void unblock(Context ctx) {
+        admin(ctx, () -> {
+            var ip = ip(ctx.pathParam("ip"));
+            var mask = Integer.parseInt(ctx.pathParam("mask"));
+            if (!blacklistedIPs.contains(ip, mask)) {
+                ctx.status(404);
+                return;
+            }
+            blacklistedIPs.unblock(ip, mask);
+            ctx.status(204);
+        });
+    }
 
     void blockUser(Context ctx) {
         admin(ctx, () -> {
@@ -125,7 +149,7 @@ public class Server {
                 ctx.status(404);
                 return;
             }
-            var ip = ip(ctx.header("X_FORWARDED_FOR"));
+            var ip = ip(ctx.header("X-FORWARDED-FOR"));
             if (!blacklisted.add(login) || blacklistedIPs.contains(ip)) {
                 ctx.status(409);
                 return;
@@ -152,7 +176,7 @@ public class Server {
             var json = (JSONObject)parser.parse(new String(Base64.getDecoder().decode(jwt.getPayload())));
             var login = (String)json.get("login");
             var user = users.get(login);
-            var ip = ip(ctx.header("X_FORWARDED_FOR"));
+            var ip = ip(ctx.header("X-FORWARDED-FOR"));
             if (user == null || blacklisted.contains(login) || blacklistedIPs.contains(ip)) {
                 ctx.status(403);
                 return;
@@ -169,7 +193,7 @@ public class Server {
             var json = (JSONObject)parser.parse(new String(Base64.getDecoder().decode(jwt.getPayload())));
             var login = (String)json.get("login");
             var admin = users.get(login);
-            var ip = ip(ctx.header("X_FORWARDED_FOR"));
+            var ip = ip(ctx.header("X-FORWARDED-FOR"));
             if (admin == null || !admin.isAdmin || blacklisted.contains(login) || blacklistedIPs.contains(ip)) {
                 ctx.status(403);
                 return;
