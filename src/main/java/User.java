@@ -1,15 +1,17 @@
 import org.json.simple.JSONObject;
 
+import java.util.Objects;
+
 public class User {
     final String password, json, login, country;
     final boolean isAdmin;
 
     public User(JSONObject json) {
-        this.password = (String)json.get("password");
-        this.login = (String)json.get("login");
-        this.country = (String)json.get("country");
+        this.password = Objects.requireNonNull((String)json.get("password"));
+        this.login = Objects.requireNonNull((String)json.get("login"));
+        this.country = Objects.requireNonNull((String)json.get("country"));
         this.isAdmin = (Boolean)json.getOrDefault("is_admin", false);
         json.remove("password");
-        this.json = json.toJSONString();
+        this.json = Objects.requireNonNull(json.toJSONString());
     }
 }

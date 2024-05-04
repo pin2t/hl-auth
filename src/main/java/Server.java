@@ -3,7 +3,6 @@ import com.auth0.jwt.algorithms.Algorithm;
 import com.auth0.jwt.exceptions.JWTVerificationException;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import io.javalin.Javalin;
-import io.javalin.http.ContentType;
 import io.javalin.http.Context;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
@@ -36,10 +35,9 @@ public class Server {
         if (file.exists()) {
             input = new FileInputStream(file);
         } else {
-            source = "users.jsonl";
-            input = Thread.currentThread().getContextClassLoader().getResourceAsStream(source);
+            source = "data/users.jsonl";
+            input = new FileInputStream(source);
         }
-        assert input != null;
         var started = System.nanoTime();
         new BufferedReader(new InputStreamReader(input)).lines().forEach(line -> {
             try {
@@ -47,6 +45,7 @@ public class Server {
                 var login = (String)json.get("login");
                 users.put(login, new User(json));
             } catch (ParseException e) {
+                log.warn("Error parsing " + line, e);
             }
         });
         log.info(String.format("Loaded %d users from %s in %.2f s", users.users.size(), source, (System.nanoTime() - started) / 1000000000.));
@@ -72,8 +71,7 @@ public class Server {
                 ctx.status(403);
                 return;
             }
-            ctx.contentType(ContentType.APPLICATION_JSON);
-            ctx.result(JWT.create()
+            ctx.json(JWT.create()
                 .withHeader("{\"alg\":\"HS256\",\"typ\": \"JWT\"}")
                 .withPayload("{\"login\":\"" + login + "\",\"nonce\": \"" + (String)json.get("nonce") + "\"}")
                 .sign(hs256)
@@ -166,9 +164,9 @@ public class Server {
         try {
             DecodedJWT jwt = JWT.require(hs256).build().verify(ctx.header("X-API-Key"));
             var json = (JSONObject)parser.parse(new String(Base64.getDecoder().decode(jwt.getPayload())));
-            var adminLogin = (String)json.get("login");
-            var admin = users.get(adminLogin);
-            if (admin == null || !admin.isAdmin || blacklisted.contains(adminLogin)) {
+            var login = (String)json.get("login");
+            var admin = users.get(login);
+            if (admin == null || !admin.isAdmin || blacklisted.contains(login)) {
                 ctx.status(403);
                 return;
             }
