@@ -11,9 +11,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
-import java.util.Base64;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
+import java.util.concurrent.*;
 import java.util.function.Consumer;
 
 public class Server {
@@ -22,7 +21,8 @@ public class Server {
     final Users users = new Users();
     final JSONParser parser = new JSONParser();
     final Algorithm hs256 = Algorithm.HMAC256(Base64.getDecoder().decode("CGWpjarkRIXzCIIw5vXKc+uESy5ebrbOyVMZvftj19k="));
-    final Set<String> blacklisted = new HashSet<>();
+    final Set<String> blacklisted = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    final Subnets blacklistedIPs = new Subnets();
 
     public static void main(String[] args) throws FileNotFoundException {
         new Server().run();
@@ -125,7 +125,8 @@ public class Server {
                 ctx.status(404);
                 return;
             }
-            if (!blacklisted.add(login)) {
+            var ip = ip(ctx.header("X_FORWARDED_FOR"));
+            if (!blacklisted.add(login) || blacklistedIPs.contains(ip)) {
                 ctx.status(409);
                 return;
             }
@@ -149,8 +150,10 @@ public class Server {
         try {
             DecodedJWT jwt = JWT.require(hs256).build().verify(ctx.header("X-API-Key"));
             var json = (JSONObject)parser.parse(new String(Base64.getDecoder().decode(jwt.getPayload())));
-            var user = users.get((String)json.get("login"));
-            if (user == null) {
+            var login = (String)json.get("login");
+            var user = users.get(login);
+            var ip = ip(ctx.header("X_FORWARDED_FOR"));
+            if (user == null || blacklisted.contains(login) || blacklistedIPs.contains(ip)) {
                 ctx.status(403);
                 return;
             }
@@ -166,7 +169,8 @@ public class Server {
             var json = (JSONObject)parser.parse(new String(Base64.getDecoder().decode(jwt.getPayload())));
             var login = (String)json.get("login");
             var admin = users.get(login);
-            if (admin == null || !admin.isAdmin || blacklisted.contains(login)) {
+            var ip = ip(ctx.header("X_FORWARDED_FOR"));
+            if (admin == null || !admin.isAdmin || blacklisted.contains(login) || blacklistedIPs.contains(ip)) {
                 ctx.status(403);
                 return;
             }
@@ -174,5 +178,15 @@ public class Server {
         } catch (JWTVerificationException | ParseException e) {
             ctx.status(403);
         }
+    }
+
+    long ip(String s) {
+        var parts = s.split("\\.");
+        assert parts.length == 4;
+        long result = 0;
+        for (int i = 0; i < 4; i++) {
+            result += Long.parseLong(parts[i]) << (24 - (8 * i));
+        }
+        return result;
     }
 }

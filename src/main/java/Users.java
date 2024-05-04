@@ -1,8 +1,8 @@
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.*;
 
 public class Users {
-    final Map<String, User> users = new HashMap<>();
+    final Map<String, User> users = new ConcurrentHashMap<>();
 
     public Users() {
     }
