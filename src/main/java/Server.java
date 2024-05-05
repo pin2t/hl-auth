@@ -18,38 +18,18 @@ import java.util.function.Consumer;
 public class Server {
     static final Logger log = LoggerFactory.getLogger(Server.class);
 
-    final Users users = new Users();
+    final Users users = new Users("/storage/data/users.jsonl", "data/users.jsonl");
     final JSONParser parser = new JSONParser();
     final Algorithm hs256 = Algorithm.HMAC256(Base64.getDecoder().decode("CGWpjarkRIXzCIIw5vXKc+uESy5ebrbOyVMZvftj19k="));
     final Set<String> blacklisted = Collections.newSetFromMap(new ConcurrentHashMap<>());
-    final Subnets blacklistedIPs = new Subnets();
+    final IPRanges blacklistedIPs = new IPRanges();
+    final Countries countries = new Countries();
 
     public static void main(String[] args) throws FileNotFoundException {
         new Server().run();
     }
 
     void run() throws FileNotFoundException {
-        InputStream input;
-        var source = "/storage/data/users.jsonl";
-        var file = new File(source);
-        if (file.exists()) {
-            input = new FileInputStream(file);
-        } else {
-            source = "data/users.jsonl";
-            input = new FileInputStream(source);
-        }
-        var started = System.nanoTime();
-        new BufferedReader(new InputStreamReader(input)).lines().forEach(line -> {
-            try {
-                var json = (JSONObject)parser.parse(line);
-                var login = (String)json.get("login");
-                users.put(login, new User(json));
-            } catch (ParseException e) {
-                log.warn("Error parsing " + line, e);
-            }
-        });
-        log.info(String.format("Loaded %d users from %s in %.2f s", users.users.size(), source, (System.nanoTime() - started) / 1000000000.));
-        log.info("starting...");
         Javalin.create(config -> {}/*config.useVirtualThreads = true*/)
             .post("/auth", this::auth)
             .get("/user", this::getUser)
@@ -67,7 +47,8 @@ public class Server {
             var json = (JSONObject)parser.parse(ctx.body());
             var login = (String)json.get("login");
             var user = users.get(login);
-            if (user == null || !user.password.equals((String)json.get("password"))) {
+            var ip = ip(ctx.header("X-FORWARDED-FOR"));
+            if (user == null || !user.password.equals((String)json.get("password")) || !countries.contains(user.country, ip)) {
                 ctx.status(403);
                 return;
             }
@@ -123,7 +104,7 @@ public class Server {
                 ctx.status(409);
                 return;
             }
-            blacklistedIPs.block(ip, mask);
+            blacklistedIPs.add(ip, mask);
             ctx.status(201);
         });
     }
@@ -136,7 +117,7 @@ public class Server {
                 ctx.status(404);
                 return;
             }
-            blacklistedIPs.unblock(ip, mask);
+            blacklistedIPs.remove(ip, mask);
             ctx.status(204);
         });
     }
@@ -177,7 +158,7 @@ public class Server {
             var login = (String)json.get("login");
             var user = users.get(login);
             var ip = ip(ctx.header("X-FORWARDED-FOR"));
-            if (user == null || blacklisted.contains(login) || blacklistedIPs.contains(ip)) {
+            if (user == null || blacklisted.contains(login) || blacklistedIPs.contains(ip) || !countries.contains(user.country, ip)) {
                 ctx.status(403);
                 return;
             }
@@ -194,7 +175,8 @@ public class Server {
             var login = (String)json.get("login");
             var admin = users.get(login);
             var ip = ip(ctx.header("X-FORWARDED-FOR"));
-            if (admin == null || !admin.isAdmin || blacklisted.contains(login) || blacklistedIPs.contains(ip)) {
+            if (admin == null || !admin.isAdmin || blacklisted.contains(login) || blacklistedIPs.contains(ip) ||
+                !countries.contains(admin.country, ip)) {
                 ctx.status(403);
                 return;
             }
