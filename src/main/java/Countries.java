@@ -24,8 +24,8 @@ class Countries {
         }
         try {
             var started = System.nanoTime();
-            Map<String, String> ids = new HashMap<>();
-            try (var reader = new BufferedReader(new FileReader(locationsFile))) {
+            Map<String, String> ids = new HashMap<>(100000);
+            try (var reader = new BufferedReader(new FileReader(locationsFile), 1000000)) {
                 String line = reader.readLine();
                 while ((line = reader.readLine()) != null) {
                     try {
@@ -38,7 +38,7 @@ class Countries {
                 }
             }
             long count = 0;
-            try (var reader = new BufferedReader(new FileReader(ipsFile))) {
+            try (var reader = new BufferedReader(new FileReader(ipsFile), 1000000)) {
                 String line = reader.readLine();
                 while ((line = reader.readLine()) != null) {
                     try {
@@ -90,6 +90,6 @@ class Countries {
     }
 
     static class Bucket {
-        final Map<IPRange, Country> ranges = new HashMap<>();
+        final Map<IPRange, Country> ranges = new HashMap<>(15000);
     }
 }

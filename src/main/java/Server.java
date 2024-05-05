@@ -46,9 +46,7 @@ public class Server {
             assert "St Kitts and Nevis".equals(c);
         });
         pool.shutdown();
-        Javalin.create(config -> {
-            /*config.useVirtualThreads = true*/
-            })
+        Javalin.create(config -> { config.useVirtualThreads = true; })
             .post("/auth", this::auth)
             .get("/user", this::getUser)
             .put("/user", this::createUser)
