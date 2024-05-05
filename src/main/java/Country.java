@@ -1,3 +1,5 @@
+import java.util.*;
+
 enum Country {
     NO(""),
     PAPUA_NEW_GUINEA("Papua New Guinea"),
@@ -251,6 +253,13 @@ enum Country {
     SAINTHELENA("Saint Helena"),
     GREENLAND("Greenland");
 
+    static Map<String, Country> vals = new HashMap<>();
+    static {
+        for (var v : Country.values()) {
+            vals.put(v.name, v);
+        }
+    }
+
     final String name;
 
     Country(String name) {
@@ -258,11 +267,6 @@ enum Country {
     }
 
     static Country fromName(String name) {
-        for (var v : Country.values()) {
-            if (v.name.equals(name)) {
-                return v;
-            }
-        }
-        return Country.NO;
+        return vals.getOrDefault(name, Country.NO);
     }
 }

@@ -97,7 +97,7 @@ public class Server {
 
     void getUser(Context ctx) {
         runUser(ctx, user -> {
-            ctx.json(user.json);
+            ctx.json(user.toJSON());
             ctx.status(200);
         });
     }
