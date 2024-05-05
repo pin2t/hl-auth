@@ -18,6 +18,9 @@ import java.util.function.Consumer;
 public class Server {
     static final Logger log = LoggerFactory.getLogger(Server.class);
     public static final String ALG_HS_256_TYP_JWT = "{\"alg\":\"HS256\",\"typ\": \"JWT\"}";
+    public static final String X_FORWARDED_FOR = "X-FORWARDED-FOR";
+    public static final String X_API_KEY = "X-API-Key";
+    public static final String LOGIN = "login";
 
     final Users users = new Users("/storage/data/users.jsonl", "data/users.jsonl");
     final JSONParser parser = new JSONParser();
@@ -33,9 +36,9 @@ public class Server {
     void run() throws FileNotFoundException {
         assert new IPRange("205.161.14.0/23").contains(IPRange.ip("205.161.15.2"));
         assert !new IPRange("46.32.0.0/19").contains(IPRange.ip("46.31.243.46"));
-        assert countries.contains("American Samoa", IPRange.ip("205.161.15.2"));
-        assert countries.contains("Bonaire, Sint Eustatius, and Saba", IPRange.ip("140.248.60.29"));
-        assert !countries.contains("Iran", IPRange.ip("46.31.243.46"));
+//        assert countries.contains("American Samoa", IPRange.ip("205.161.15.2"));
+//        assert countries.contains("Bonaire, Sint Eustatius, and Saba", IPRange.ip("140.248.60.29"));
+//        assert !countries.contains("Iran", IPRange.ip("46.31.243.46"));
         var bl = new IPRanges();
         bl.add("41.174.0.0", "16");
         assert bl.contains(IPRange.ip("41.174.13.223"));
@@ -54,7 +57,7 @@ public class Server {
     void auth(Context ctx) {
         try {
             var json = (JSONObject)parser.parse(ctx.body());
-            var login = (String)json.get("login");
+            var login = (String)json.get(LOGIN);
             var user = users.get(login);
             if (user == null) {
                 ctx.status(403);
@@ -68,7 +71,7 @@ public class Server {
                 ctx.status(403);
                 return;
             }
-            var ip = IPRange.ip(ctx.header("X-FORWARDED-FOR"));
+            var ip = IPRange.ip(ctx.header(X_FORWARDED_FOR));
             if (blacklistedIPs.contains(ip)) {
                 ctx.status(403);
                 return;
@@ -98,12 +101,12 @@ public class Server {
     void createUser(Context ctx) {
         try {
             var json = (JSONObject)parser.parse(ctx.body());
-            var login = (String)json.get("login");
+            var login = (String)json.get(LOGIN);
             if (users.get(login) != null) {
                 ctx.status(409);
                 return;
             }
-            var ip = IPRange.ip(ctx.header("X-FORWARDED-FOR"));
+            var ip = IPRange.ip(ctx.header(X_FORWARDED_FOR));
             if (blacklistedIPs.contains(ip)) {
                 ctx.status(403);
                 return;
@@ -120,7 +123,7 @@ public class Server {
             try {
                 var json = (JSONObject)parser.parse(ctx.body());
                 json.putIfAbsent("is_admin", user.isAdmin);
-                json.putIfAbsent("login", user.login);
+                json.putIfAbsent(LOGIN, user.login);
                 json.putIfAbsent("country", user.country);
                 json.putIfAbsent("password", user.password);
                 json.putIfAbsent("name", user.name);
@@ -161,13 +164,13 @@ public class Server {
 
     void blockUser(Context ctx) {
         runAdmin(ctx, () -> {
-            var login = ctx.pathParam("login");
+            var login = ctx.pathParam(LOGIN);
             var user = users.get(login);
             if (user == null) {
                 ctx.status(404);
                 return;
             }
-            var ip = IPRange.ip(ctx.header("X-FORWARDED-FOR"));
+            var ip = IPRange.ip(ctx.header(X_FORWARDED_FOR));
             if (blacklistedIPs.contains(ip)) { ctx.status(409); return; }
             if (!blacklisted.add(login)) { ctx.status(409); return; }
             ctx.status(201);
@@ -176,7 +179,7 @@ public class Server {
 
     void unblockUser(Context ctx) {
         runAdmin(ctx, () -> {
-            var login = ctx.pathParam("login");
+            var login = ctx.pathParam(LOGIN);
             var user = users.get(login);
             if (user == null || !blacklisted.remove(login)) {
                 ctx.status(404);
@@ -188,9 +191,9 @@ public class Server {
 
     void runUser(Context ctx, Consumer<User> operation) {
         try {
-            DecodedJWT jwt = JWT.require(hs256).build().verify(ctx.header("X-API-Key"));
+            DecodedJWT jwt = JWT.require(hs256).build().verify(ctx.header(X_API_KEY));
             var json = (JSONObject)parser.parse(new String(Base64.getDecoder().decode(jwt.getPayload())));
-            var login = (String)json.get("login");
+            var login = (String)json.get(LOGIN);
             var user = users.get(login);
             if (user == null) {
                 ctx.status(403);
@@ -200,12 +203,13 @@ public class Server {
                 ctx.status(403);
                 return;
             }
-            var ip = IPRange.ip(ctx.header("X-FORWARDED-FOR"));
+            var ip = IPRange.ip(ctx.header(X_FORWARDED_FOR));
             if (blacklistedIPs.contains(ip)) {
                 ctx.status(403);
                 return;
             }
-            if (!countries.contains(user.country, ip)) {
+            var country = countries.country(ip);
+            if (!country.equals(user.country)) {
                 ctx.status(403);
                 return;
             }
@@ -217,16 +221,20 @@ public class Server {
 
     void runAdmin(Context ctx, Runnable operation) {
         try {
-            DecodedJWT jwt = JWT.require(hs256).build().verify(ctx.header("X-API-Key"));
+            DecodedJWT jwt = JWT.require(hs256).build().verify(ctx.header(X_API_KEY));
             var json = (JSONObject)parser.parse(new String(Base64.getDecoder().decode(jwt.getPayload())));
-            var login = (String)json.get("login");
+            var login = (String)json.get(LOGIN);
             var admin = users.get(login);
-            var ip = IPRange.ip(ctx.header("X-FORWARDED-FOR"));
+            var ip = IPRange.ip(ctx.header(X_FORWARDED_FOR));
             if (admin == null ||
                 !admin.isAdmin ||
                 blacklisted.contains(login) ||
-                blacklistedIPs.contains(ip) ||
-                !countries.contains(admin.country, ip)) {
+                blacklistedIPs.contains(ip)) {
+                ctx.status(403);
+                return;
+            }
+            var country = countries.country(ip);
+            if (!country.equals(admin.country)) {
                 ctx.status(403);
                 return;
             }

@@ -19,7 +19,7 @@ public class Users {
             var started = System.nanoTime();
             var prevSize = users.size();
             try {
-                new BufferedReader(new InputStreamReader(new FileInputStream(f))).lines().forEach(line -> {
+                new BufferedReader(new InputStreamReader(new FileInputStream(f)), 10000000).lines().forEach(line -> {
                     try {
                         var json = (JSONObject)parser.parse(line);
                         var login = (String)json.get("login");

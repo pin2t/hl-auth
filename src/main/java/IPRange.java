@@ -12,10 +12,10 @@ public class IPRange {
 
     IPRange(String network) {
         this.network = network;
-        String[] pair = network.split("/");
-        assert pair.length == 2;
-        var ip = ip(pair[0]);
-        var mask = Long.parseLong(pair[1]);
+        var slash = network.indexOf('/');
+        assert slash > 0;
+        var ip = ip(network.substring(0, slash));
+        var mask = Long.parseLong(network.substring(slash + 1));
         minMask = min(minMask, mask);
         var first = ip;
         for (var bit = 31 - mask; bit >= 0; bit--) { first &= ~(1L << bit); }
@@ -43,11 +43,14 @@ public class IPRange {
     }
 
     static long ip(String s) {
-        var parts = s.split("\\.");
-        assert parts.length == 4;
         long result = 0;
-        for (int i = 0; i < 4; i++) {
-            result += Long.parseLong(parts[i]) << (24 - (8 * i));
+        int p = 0, j = 0;
+        for (int i = 0; i < s.length(); i++) {
+            if (s.charAt(i) == '.') {
+                result += Long.parseLong(s.substring(p, i)) << (24 - (8 * j));
+                j++;
+                p = i + 1;
+            }
         }
         return result;
     }
