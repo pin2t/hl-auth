@@ -34,10 +34,11 @@ public class Server {
         assert !new IPRange("46.32.0.0/19").contains(IPRange.ip("46.31.243.46"));
         assert countries.contains("American Samoa", IPRange.ip("205.161.15.2"));
         assert countries.contains("Bonaire, Sint Eustatius, and Saba", IPRange.ip("140.248.60.29"));
-        for (var r : countries.ranges.get("Iran").ranges) {
-            log.info(r.network);
-        }
         assert !countries.contains("Iran", IPRange.ip("46.31.243.46"));
+        log.info("41.174.13.223: " + IPRange.ip("41.174.13.223"));
+        var bl = new IPRanges();
+        bl.add("41.174.0.0", "16");
+        assert bl.contains(IPRange.ip("41.174.13.223"));
         Javalin.create(config -> {}/*config.useVirtualThreads = true*/)
             .post("/auth", this::auth)
             .get("/user", this::getUser)
@@ -104,7 +105,14 @@ public class Server {
             var json = (JSONObject)parser.parse(ctx.body());
             var login = (String)json.get("login");
             if (users.get(login) != null) {
+                log.info("409 user " + login + " already exist");
                 ctx.status(409);
+                return;
+            }
+            var ip = IPRange.ip(ctx.header("X-FORWARDED-FOR"));
+            if (blacklistedIPs.contains(ip)) {
+                log.info("403 blocked ip " + ctx.header("X-FORWARDED-FOR"));
+                ctx.status(403);
                 return;
             }
             users.put(login, new User(json));
@@ -192,12 +200,12 @@ public class Server {
                 ctx.status(403);
                 return;
             }
-            var ip = IPRange.ip(ctx.header("X-FORWARDED-FOR"));
             if (blacklisted.contains(login)) {
                 log.info("403 blocked user " + login);
                 ctx.status(403);
                 return;
             }
+            var ip = IPRange.ip(ctx.header("X-FORWARDED-FOR"));
             if (blacklistedIPs.contains(ip)) {
                 log.info("403 blocked user ip " + ctx.header("X-FORWARDED-FOR"));
                 ctx.status(403);

@@ -1,7 +1,8 @@
 import java.util.*;
+import java.util.concurrent.*;
 
 public class IPRanges {
-    final Set<IPRange> ranges = new HashSet<>();
+    final Set<IPRange> ranges = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     public IPRanges() {
     }
