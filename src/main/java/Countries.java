@@ -24,8 +24,8 @@ class Countries {
         }
         try {
             var started = System.nanoTime();
-            final Map<String, String> ids = new HashMap<>(100000);
-            try (var reader = new BufferedReader(new FileReader(locationsFile), 1000000)) {
+            Map<String, String> ids = new HashMap<>();
+            try (var reader = new BufferedReader(new FileReader(locationsFile))) {
                 String line = reader.readLine();
                 while ((line = reader.readLine()) != null) {
                     try {
@@ -38,7 +38,7 @@ class Countries {
                 }
             }
             long count = 0;
-            try (var reader = new BufferedReader(new FileReader(ipsFile), 1000000)) {
+            try (var reader = new BufferedReader(new FileReader(ipsFile))) {
                 String line = reader.readLine();
                 while ((line = reader.readLine()) != null) {
                     try {
@@ -48,7 +48,7 @@ class Countries {
                             continue;
                         }
                         var range = new IPRange(fields.get(0));
-                        this.buckets[(int) (range.first / 0xffffff)].ranges.put(range, name);
+                        this.buckets[(int) (range.first / 0xffffff)].ranges.put(range, Country.fromName(name));
                         count++;
                     } catch (Exception e) {
                         log.error("error parsing " + line, e);
@@ -63,7 +63,7 @@ class Countries {
 
     List<String> csvFields(String line) {
         char[] chars = line.toCharArray();
-        List<String> result = new ArrayList<>(10);
+        List<String> result = new ArrayList<>(16);
         int p = 0;
         boolean inside = false;
         for (int i = 0; i < chars.length; i++) {
@@ -74,7 +74,7 @@ class Countries {
                 if (!s.isEmpty() && s.charAt(0) == '"') {
                     result.add(s.substring(1, s.length() - 1));
                 } else {
-                     result.add(s);
+                    result.add(s);
                 }
                 p = i + 1;
             }
@@ -82,14 +82,14 @@ class Countries {
         return result;
     }
 
-    String country(long ip) {
+    Country country(long ip) {
         for (var e : this.buckets[(int) (ip / 0xffffff)].ranges.entrySet()) {
             if (e.getKey().contains(ip)) return e.getValue();
         }
-        return "";
+        return Country.NO;
     }
 
     static class Bucket {
-        final Map<IPRange, String> ranges = new HashMap<>(15000);
+        final Map<IPRange, Country> ranges = new HashMap<>();
     }
 }

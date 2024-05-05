@@ -9,7 +9,6 @@ import java.util.concurrent.*;
 public class Users {
     static final Logger log = LoggerFactory.getLogger(Users.class);
 
-    final JSONParser parser = new JSONParser();
     final Map<String, User> users = new ConcurrentHashMap<>();
     final String[] files;
 
@@ -24,6 +23,7 @@ public class Users {
             var started = System.nanoTime();
             var prevSize = users.size();
             try {
+                JSONParser parser = new JSONParser();
                 new BufferedReader(new InputStreamReader(new FileInputStream(f)), 10000000).lines().forEach(line -> {
                     try {
                         var json = (JSONObject)parser.parse(line);

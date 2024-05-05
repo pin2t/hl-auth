@@ -23,7 +23,6 @@ public class Server {
     public static final String LOGIN = "login";
 
     final Users users = new Users("/storage/data/users.jsonl", "data/users.jsonl");
-    final JSONParser parser = new JSONParser();
     final Algorithm hs256 = Algorithm.HMAC256(Base64.getDecoder().decode("CGWpjarkRIXzCIIw5vXKc+uESy5ebrbOyVMZvftj19k="));
     final Set<String> blacklisted = Collections.newSetFromMap(new ConcurrentHashMap<>());
     final IPRanges blacklistedIPs = new IPRanges();
@@ -47,7 +46,9 @@ public class Server {
             assert "St Kitts and Nevis".equals(c);
         });
         pool.shutdown();
-        Javalin.create(config -> {}/*config.useVirtualThreads = true*/)
+        Javalin.create(config -> {
+            /*config.useVirtualThreads = true*/
+            })
             .post("/auth", this::auth)
             .get("/user", this::getUser)
             .put("/user", this::createUser)
@@ -61,14 +62,14 @@ public class Server {
 
     void auth(Context ctx) {
         try {
-            var json = (JSONObject)parser.parse(ctx.body());
+            var json = (JSONObject) new JSONParser().parse(ctx.body());
             var login = (String)json.get(LOGIN);
             var user = users.get(login);
             if (user == null) {
                 ctx.status(403);
                 return;
             }
-            if (!user.password.equals((String)json.get("password"))) {
+            if (!user.password().equals((String)json.get("password"))) {
                 ctx.status(403);
                 return;
             }
@@ -82,7 +83,7 @@ public class Server {
                 return;
             }
             var country = countries.country(ip);
-            if (!country.equals(user.country)) {
+            if (country != user.country()) {
                 ctx.status(403);
                 return;
             }
@@ -105,7 +106,7 @@ public class Server {
 
     void createUser(Context ctx) {
         try {
-            var json = (JSONObject)parser.parse(ctx.body());
+            var json = (JSONObject)new JSONParser().parse(ctx.body());
             var login = (String)json.get(LOGIN);
             if (users.get(login) != null) {
                 ctx.status(409);
@@ -126,14 +127,16 @@ public class Server {
     void updateUser(Context ctx) {
         runUser(ctx, user -> {
             try {
-                var json = (JSONObject)parser.parse(ctx.body());
-                json.putIfAbsent("is_admin", user.isAdmin);
-                json.putIfAbsent(LOGIN, user.login);
-                json.putIfAbsent("country", user.country);
-                json.putIfAbsent("password", user.password);
-                json.putIfAbsent("name", user.name);
-                json.putIfAbsent("phone", user.phone);
-                users.put(user.login, new User(json));
+                var json = (JSONObject)new JSONParser().parse(ctx.body());
+                if (user.json.containsKey("is_admin")) {
+                    json.putIfAbsent("is_admin", user.isAdmin());
+                }
+                json.putIfAbsent(LOGIN, user.login());
+                json.putIfAbsent("country", user.country().name);
+                json.putIfAbsent("password", user.password());
+                json.putIfAbsent("name", user.name());
+                json.putIfAbsent("phone", user.phone());
+                users.put(user.login(), new User(json));
                 ctx.status(202);
             } catch (ParseException e) {
                 ctx.status(400);
@@ -197,7 +200,7 @@ public class Server {
     void runUser(Context ctx, Consumer<User> operation) {
         try {
             DecodedJWT jwt = JWT.require(hs256).build().verify(ctx.header(X_API_KEY));
-            var json = (JSONObject)parser.parse(new String(Base64.getDecoder().decode(jwt.getPayload())));
+            var json = (JSONObject)new JSONParser().parse(new String(Base64.getDecoder().decode(jwt.getPayload())));
             var login = (String)json.get(LOGIN);
             var user = users.get(login);
             if (user == null) {
@@ -214,7 +217,7 @@ public class Server {
                 return;
             }
             var country = countries.country(ip);
-            if (!country.equals(user.country)) {
+            if (country != user.country()) {
                 ctx.status(403);
                 return;
             }
@@ -227,19 +230,19 @@ public class Server {
     void runAdmin(Context ctx, Runnable operation) {
         try {
             DecodedJWT jwt = JWT.require(hs256).build().verify(ctx.header(X_API_KEY));
-            var json = (JSONObject)parser.parse(new String(Base64.getDecoder().decode(jwt.getPayload())));
+            var json = (JSONObject)new JSONParser().parse(new String(Base64.getDecoder().decode(jwt.getPayload())));
             var login = (String)json.get(LOGIN);
             var admin = users.get(login);
             var ip = IPRange.ip(ctx.header(X_FORWARDED_FOR));
             if (admin == null ||
-                !admin.isAdmin ||
+                !admin.isAdmin() ||
                 blacklisted.contains(login) ||
                 blacklistedIPs.contains(ip)) {
                 ctx.status(403);
                 return;
             }
             var country = countries.country(ip);
-            if (!country.equals(admin.country)) {
+            if (country != admin.country()) {
                 ctx.status(403);
                 return;
             }
