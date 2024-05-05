@@ -56,11 +56,29 @@ public class Server {
             var login = (String)json.get("login");
             var user = users.get(login);
             var ip = IPRange.ip(ctx.header("X-FORWARDED-FOR"));
-            if (user == null ||
-                !user.password.equals((String)json.get("password")) ||
-                blacklisted.contains(login) ||
-                blacklistedIPs.contains(ip) ||
-                !countries.contains(user.country, ip)) {
+            if (user == null) {
+                log.info("403 user not found " + login);
+                ctx.status(403);
+                return;
+            }
+            if (!user.password.equals((String)json.get("password"))) {
+                log.info("403 wrong password " + (String)json.get("password"));
+                ctx.status(403);
+                return;
+            }
+            if (blacklisted.contains(login)) {
+                log.info("403 user blacklisted " + login);
+                ctx.status(403);
+                return;
+            }
+            if (blacklistedIPs.contains(ip)) {
+                log.info("403 user ip blacklisted " + ctx.header("X-FORWARDED-FOR"));
+                ctx.status(403);
+                return;
+            }
+            var country = countries.country(ip);
+            if (!country.isEmpty() && !country.equals(user.country)) {
+                log.info("403 request country \"" + country + "\" does not match user country \"" + user.country + "\"");
                 ctx.status(403);
                 return;
             }
@@ -75,7 +93,7 @@ public class Server {
     }
 
     void getUser(Context ctx) {
-        user(ctx, user -> {
+        runUser(ctx, user -> {
             ctx.json(user.json);
             ctx.status(200);
         });
@@ -97,7 +115,7 @@ public class Server {
     }
 
     void updateUser(Context ctx) {
-        user(ctx, user -> {
+        runUser(ctx, user -> {
             try {
                 var json = (JSONObject)parser.parse(ctx.body());
                 json.putIfAbsent("is_admin", user.isAdmin);
@@ -115,7 +133,7 @@ public class Server {
     }
 
     void block(Context ctx) {
-        admin(ctx, () -> {
+        runAdmin(ctx, () -> {
             if (blacklistedIPs.contains(ctx.pathParam("ip"), ctx.pathParam("mask"))) {
                 ctx.status(409);
                 return;
@@ -126,7 +144,7 @@ public class Server {
     }
 
     void unblock(Context ctx) {
-        admin(ctx, () -> {
+        runAdmin(ctx, () -> {
             if (!blacklistedIPs.contains(ctx.pathParam("ip"), ctx.pathParam("mask"))) {
                 ctx.status(404);
                 return;
@@ -137,7 +155,7 @@ public class Server {
     }
 
     void blockUser(Context ctx) {
-        admin(ctx, () -> {
+        runAdmin(ctx, () -> {
             var login = ctx.pathParam("login");
             var user = users.get(login);
             if (user == null) {
@@ -152,7 +170,7 @@ public class Server {
     }
 
     void unblockUser(Context ctx) {
-        admin(ctx, () -> {
+        runAdmin(ctx, () -> {
             var login = ctx.pathParam("login");
             var user = users.get(login);
             if (user == null || !blacklisted.remove(login)) {
@@ -163,7 +181,7 @@ public class Server {
         });
     }
 
-    void user(Context ctx, Consumer<User> operation) {
+    void runUser(Context ctx, Consumer<User> operation) {
         try {
             DecodedJWT jwt = JWT.require(hs256).build().verify(ctx.header("X-API-Key"));
             var json = (JSONObject)parser.parse(new String(Base64.getDecoder().decode(jwt.getPayload())));
@@ -196,7 +214,7 @@ public class Server {
         }
     }
 
-    void admin(Context ctx, Runnable operation) {
+    void runAdmin(Context ctx, Runnable operation) {
         try {
             DecodedJWT jwt = JWT.require(hs256).build().verify(ctx.header("X-API-Key"));
             var json = (JSONObject)parser.parse(new String(Base64.getDecoder().decode(jwt.getPayload())));

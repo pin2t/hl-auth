@@ -2,8 +2,11 @@ import org.slf4j.*;
 
 import java.util.*;
 
+import static java.lang.Math.min;
+
 public class IPRange {
     static final Logger log = LoggerFactory.getLogger(IPRange.class);
+    static long minMask = 32L;
     final long first, last;
     final String network;
 
@@ -13,6 +16,7 @@ public class IPRange {
         assert pair.length == 2;
         var ip = ip(pair[0]);
         var mask = Long.parseLong(pair[1]);
+        minMask = min(minMask, mask);
         var first = ip;
         for (var bit = 31 - mask; bit >= 0; bit--) { first &= ~(1L << bit); }
         var last = ip;
