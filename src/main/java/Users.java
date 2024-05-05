@@ -11,8 +11,13 @@ public class Users {
 
     final JSONParser parser = new JSONParser();
     final Map<String, User> users = new ConcurrentHashMap<>();
+    final String[] files;
 
     public Users(String... files) {
+        this.files = files;
+    }
+
+    void load() {
         for (var name : files) {
             var f = new File(name);
             if (!f.exists()) { continue; }

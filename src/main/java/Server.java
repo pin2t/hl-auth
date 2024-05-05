@@ -36,12 +36,17 @@ public class Server {
     void run() throws FileNotFoundException {
         assert new IPRange("205.161.14.0/23").contains(IPRange.ip("205.161.15.2"));
         assert !new IPRange("46.32.0.0/19").contains(IPRange.ip("46.31.243.46"));
-//        assert countries.contains("American Samoa", IPRange.ip("205.161.15.2"));
-//        assert countries.contains("Bonaire, Sint Eustatius, and Saba", IPRange.ip("140.248.60.29"));
-//        assert !countries.contains("Iran", IPRange.ip("46.31.243.46"));
         var bl = new IPRanges();
         bl.add("41.174.0.0", "16");
         assert bl.contains(IPRange.ip("41.174.13.223"));
+        var pool = Executors.newCachedThreadPool();
+        pool.submit(() -> users.load());
+        pool.submit(() -> {
+            countries.load();
+            var c = countries.country(IPRange.ip("140.248.59.119"));
+            assert "St Kitts and Nevis".equals(c);
+        });
+        pool.shutdown();
         Javalin.create(config -> {}/*config.useVirtualThreads = true*/)
             .post("/auth", this::auth)
             .get("/user", this::getUser)
