@@ -30,6 +30,14 @@ public class Server {
     }
 
     void run() throws FileNotFoundException {
+        assert new IPRange("205.161.14.0/23").contains(IPRange.ip("205.161.15.2"));
+        assert !new IPRange("46.32.0.0/19").contains(IPRange.ip("46.31.243.46"));
+        assert countries.contains("American Samoa", IPRange.ip("205.161.15.2"));
+        assert countries.contains("Bonaire, Sint Eustatius, and Saba", IPRange.ip("140.248.60.29"));
+        for (var r : countries.ranges.get("Iran").ranges) {
+            log.info(r.network);
+        }
+        assert !countries.contains("Iran", IPRange.ip("46.31.243.46"));
         Javalin.create(config -> {}/*config.useVirtualThreads = true*/)
             .post("/auth", this::auth)
             .get("/user", this::getUser)
@@ -47,8 +55,12 @@ public class Server {
             var json = (JSONObject)parser.parse(ctx.body());
             var login = (String)json.get("login");
             var user = users.get(login);
-            var ip = ip(ctx.header("X-FORWARDED-FOR"));
-            if (user == null || !user.password.equals((String)json.get("password")) || !countries.contains(user.country, ip)) {
+            var ip = IPRange.ip(ctx.header("X-FORWARDED-FOR"));
+            if (user == null ||
+                !user.password.equals((String)json.get("password")) ||
+                blacklisted.contains(login) ||
+                blacklistedIPs.contains(ip) ||
+                !countries.contains(user.country, ip)) {
                 ctx.status(403);
                 return;
             }
@@ -63,7 +75,10 @@ public class Server {
     }
 
     void getUser(Context ctx) {
-        user(ctx, user -> ctx.json(user.json));
+        user(ctx, user -> {
+            ctx.json(user.json);
+            ctx.status(200);
+        });
     }
 
     void createUser(Context ctx) {
@@ -89,7 +104,10 @@ public class Server {
                 json.putIfAbsent("login", user.login);
                 json.putIfAbsent("country", user.country);
                 json.putIfAbsent("password", user.password);
+                json.putIfAbsent("name", user.name);
+                json.putIfAbsent("phone", user.phone);
                 users.put(user.login, new User(json));
+                ctx.status(202);
             } catch (ParseException e) {
                 ctx.status(400);
             }
@@ -98,26 +116,22 @@ public class Server {
 
     void block(Context ctx) {
         admin(ctx, () -> {
-            var ip = ip(ctx.pathParam("ip"));
-            var mask = Integer.parseInt(ctx.pathParam("mask"));
-            if (blacklistedIPs.contains(ip, mask)) {
+            if (blacklistedIPs.contains(ctx.pathParam("ip"), ctx.pathParam("mask"))) {
                 ctx.status(409);
                 return;
             }
-            blacklistedIPs.add(ip, mask);
+            blacklistedIPs.add(ctx.pathParam("ip"), ctx.pathParam("mask"));
             ctx.status(201);
         });
     }
 
     void unblock(Context ctx) {
         admin(ctx, () -> {
-            var ip = ip(ctx.pathParam("ip"));
-            var mask = Integer.parseInt(ctx.pathParam("mask"));
-            if (!blacklistedIPs.contains(ip, mask)) {
+            if (!blacklistedIPs.contains(ctx.pathParam("ip"), ctx.pathParam("mask"))) {
                 ctx.status(404);
                 return;
             }
-            blacklistedIPs.remove(ip, mask);
+            blacklistedIPs.remove(ctx.pathParam("ip"), ctx.pathParam("mask"));
             ctx.status(204);
         });
     }
@@ -130,11 +144,9 @@ public class Server {
                 ctx.status(404);
                 return;
             }
-            var ip = ip(ctx.header("X-FORWARDED-FOR"));
-            if (!blacklisted.add(login) || blacklistedIPs.contains(ip)) {
-                ctx.status(409);
-                return;
-            }
+            var ip = IPRange.ip(ctx.header("X-FORWARDED-FOR"));
+            if (blacklistedIPs.contains(ip)) { ctx.status(409); return; }
+            if (!blacklisted.add(login)) { ctx.status(409); return; }
             ctx.status(201);
         });
     }
@@ -157,8 +169,24 @@ public class Server {
             var json = (JSONObject)parser.parse(new String(Base64.getDecoder().decode(jwt.getPayload())));
             var login = (String)json.get("login");
             var user = users.get(login);
-            var ip = ip(ctx.header("X-FORWARDED-FOR"));
-            if (user == null || blacklisted.contains(login) || blacklistedIPs.contains(ip) || !countries.contains(user.country, ip)) {
+            if (user == null) {
+                log.info("403 user not found " + login);
+                ctx.status(403);
+                return;
+            }
+            var ip = IPRange.ip(ctx.header("X-FORWARDED-FOR"));
+            if (blacklisted.contains(login)) {
+                log.info("403 blocked user " + login);
+                ctx.status(403);
+                return;
+            }
+            if (blacklistedIPs.contains(ip)) {
+                log.info("403 blocked user ip " + ctx.header("X-FORWARDED-FOR"));
+                ctx.status(403);
+                return;
+            }
+            if (!countries.contains(user.country, ip)) {
+                log.info("403 user country \"" + user.country + "\" does not contains IP " + ctx.header("X-FORWARDED-FOR"));
                 ctx.status(403);
                 return;
             }
@@ -174,8 +202,11 @@ public class Server {
             var json = (JSONObject)parser.parse(new String(Base64.getDecoder().decode(jwt.getPayload())));
             var login = (String)json.get("login");
             var admin = users.get(login);
-            var ip = ip(ctx.header("X-FORWARDED-FOR"));
-            if (admin == null || !admin.isAdmin || blacklisted.contains(login) || blacklistedIPs.contains(ip) ||
+            var ip = IPRange.ip(ctx.header("X-FORWARDED-FOR"));
+            if (admin == null ||
+                !admin.isAdmin ||
+                blacklisted.contains(login) ||
+                blacklistedIPs.contains(ip) ||
                 !countries.contains(admin.country, ip)) {
                 ctx.status(403);
                 return;
@@ -184,15 +215,5 @@ public class Server {
         } catch (JWTVerificationException | ParseException e) {
             ctx.status(403);
         }
-    }
-
-    long ip(String s) {
-        var parts = s.split("\\.");
-        assert parts.length == 4;
-        long result = 0;
-        for (int i = 0; i < 4; i++) {
-            result += Long.parseLong(parts[i]) << (24 - (8 * i));
-        }
-        return result;
     }
 }

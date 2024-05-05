@@ -14,16 +14,16 @@ public class IPRanges {
         return ranges.stream().anyMatch(range -> range.contains(ip));
     }
 
-    boolean contains(long ip, int mask) {
-        return ranges.contains(new IPRange(ip, mask));
+    boolean contains(String ip, String mask) {
+        return ranges.contains(new IPRange(ip + "/" + mask));
     }
 
-    void add(long ip, int mask) {
-        ranges.add(new IPRange(ip, mask));
+    void add(String ip, String mask) {
+        ranges.add(new IPRange(ip + "/" + mask));
     }
 
-    void remove(long ip, int mask) {
-        ranges.remove(new IPRange(ip, mask));
+    void remove(String ip, String mask) {
+        ranges.remove(new IPRange(ip + "/" + mask));
     }
 
     void merge(IPRanges other) {

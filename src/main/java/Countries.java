@@ -41,7 +41,7 @@ class Countries {
                     try {
                         var fields = line.split("\\,");
                         var range = new IPRange(fields[0]);
-                        var name = ids.get(Integer.valueOf(!fields[2].isEmpty() ? fields[2] : fields[1]));
+                        var name = ids.get(Integer.valueOf(!fields[1].isEmpty() ? fields[1] : fields[2]));
                         if (name == null) continue;
                         ranges.merge(name, new IPRanges(range), (old, _new) -> {
                             old.merge(_new);
@@ -63,6 +63,6 @@ class Countries {
 
     boolean contains(String country, long ip) {
         var rs = ranges.get(country);
-        return rs != null && rs.contains(ip);
+        return rs == null || rs.contains(ip);
     }
 }
