@@ -17,6 +17,7 @@ import java.util.function.Consumer;
 
 public class Server {
     static final Logger log = LoggerFactory.getLogger(Server.class);
+    public static final String ALG_HS_256_TYP_JWT = "{\"alg\":\"HS256\",\"typ\": \"JWT\"}";
 
     final Users users = new Users("/storage/data/users.jsonl", "data/users.jsonl");
     final JSONParser parser = new JSONParser();
@@ -35,7 +36,6 @@ public class Server {
         assert countries.contains("American Samoa", IPRange.ip("205.161.15.2"));
         assert countries.contains("Bonaire, Sint Eustatius, and Saba", IPRange.ip("140.248.60.29"));
         assert !countries.contains("Iran", IPRange.ip("46.31.243.46"));
-        log.info("41.174.13.223: " + IPRange.ip("41.174.13.223"));
         var bl = new IPRanges();
         bl.add("41.174.0.0", "16");
         assert bl.contains(IPRange.ip("41.174.13.223"));
@@ -56,35 +56,30 @@ public class Server {
             var json = (JSONObject)parser.parse(ctx.body());
             var login = (String)json.get("login");
             var user = users.get(login);
-            var ip = IPRange.ip(ctx.header("X-FORWARDED-FOR"));
             if (user == null) {
-                log.info("403 user not found " + login);
                 ctx.status(403);
                 return;
             }
             if (!user.password.equals((String)json.get("password"))) {
-                log.info("403 wrong password " + (String)json.get("password"));
                 ctx.status(403);
                 return;
             }
             if (blacklisted.contains(login)) {
-                log.info("403 user blacklisted " + login);
                 ctx.status(403);
                 return;
             }
+            var ip = IPRange.ip(ctx.header("X-FORWARDED-FOR"));
             if (blacklistedIPs.contains(ip)) {
-                log.info("403 user ip blacklisted " + ctx.header("X-FORWARDED-FOR"));
                 ctx.status(403);
                 return;
             }
             var country = countries.country(ip);
-            if (!country.isEmpty() && !country.equals(user.country)) {
-                log.info("403 request country \"" + country + "\" does not match user country \"" + user.country + "\"");
+            if (!country.equals(user.country)) {
                 ctx.status(403);
                 return;
             }
             ctx.json(JWT.create()
-                .withHeader("{\"alg\":\"HS256\",\"typ\": \"JWT\"}")
+                .withHeader(ALG_HS_256_TYP_JWT)
                 .withPayload("{\"login\":\"" + login + "\",\"nonce\": \"" + (String)json.get("nonce") + "\"}")
                 .sign(hs256)
             );
@@ -105,13 +100,11 @@ public class Server {
             var json = (JSONObject)parser.parse(ctx.body());
             var login = (String)json.get("login");
             if (users.get(login) != null) {
-                log.info("409 user " + login + " already exist");
                 ctx.status(409);
                 return;
             }
             var ip = IPRange.ip(ctx.header("X-FORWARDED-FOR"));
             if (blacklistedIPs.contains(ip)) {
-                log.info("403 blocked ip " + ctx.header("X-FORWARDED-FOR"));
                 ctx.status(403);
                 return;
             }
@@ -142,22 +135,26 @@ public class Server {
 
     void block(Context ctx) {
         runAdmin(ctx, () -> {
-            if (blacklistedIPs.contains(ctx.pathParam("ip"), ctx.pathParam("mask"))) {
+            var ip = ctx.pathParam("ip");
+            var mask = ctx.pathParam("mask");
+            if (blacklistedIPs.contains(ip, mask)) {
                 ctx.status(409);
                 return;
             }
-            blacklistedIPs.add(ctx.pathParam("ip"), ctx.pathParam("mask"));
+            blacklistedIPs.add(ip, mask);
             ctx.status(201);
         });
     }
 
     void unblock(Context ctx) {
         runAdmin(ctx, () -> {
-            if (!blacklistedIPs.contains(ctx.pathParam("ip"), ctx.pathParam("mask"))) {
+            var ip = ctx.pathParam("ip");
+            var mask = ctx.pathParam("mask");
+            if (!blacklistedIPs.contains(ip, mask)) {
                 ctx.status(404);
                 return;
             }
-            blacklistedIPs.remove(ctx.pathParam("ip"), ctx.pathParam("mask"));
+            blacklistedIPs.remove(ip, mask);
             ctx.status(204);
         });
     }
@@ -196,23 +193,19 @@ public class Server {
             var login = (String)json.get("login");
             var user = users.get(login);
             if (user == null) {
-                log.info("403 user not found " + login);
                 ctx.status(403);
                 return;
             }
             if (blacklisted.contains(login)) {
-                log.info("403 blocked user " + login);
                 ctx.status(403);
                 return;
             }
             var ip = IPRange.ip(ctx.header("X-FORWARDED-FOR"));
             if (blacklistedIPs.contains(ip)) {
-                log.info("403 blocked user ip " + ctx.header("X-FORWARDED-FOR"));
                 ctx.status(403);
                 return;
             }
             if (!countries.contains(user.country, ip)) {
-                log.info("403 user country \"" + user.country + "\" does not contains IP " + ctx.header("X-FORWARDED-FOR"));
                 ctx.status(403);
                 return;
             }

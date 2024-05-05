@@ -64,7 +64,6 @@ class Countries {
                 log.info(String.format("Loaded %d ranges for %d countries from %s in %.2f s",
                         count, ranges.keySet().size(), ipsFile.getCanonicalPath(), (System.nanoTime() - started) / 1000000000.)
                 );
-                log.info("minimum mask found " + IPRange.minMask);
             } catch (Exception e) {
                 log.error("unhandled exception", e);
             }
