@@ -7,10 +7,10 @@ import static java.lang.Math.min;
 public class IPRange {
     static final Logger log = LoggerFactory.getLogger(IPRange.class);
     final long first, last;
-//    final String network;
+    final String network;
 
     IPRange(String network) {
-//        this.network = network;
+        this.network = network;
         var slash = network.indexOf('/');
         assert slash > 0;
         var ip = ip(network.substring(0, slash));
@@ -24,6 +24,10 @@ public class IPRange {
     }
 
     boolean contains(long ip) {
+        boolean result = ip >= first && ip <= last;
+        if (result) {
+            log.info(this.network + " contains " + ip / 0x1000000 + "." + (ip / 0x10000) % 0x100 + "." + (ip / 0x100) % 0x100 + "." + ip % 0x100);
+        }
         return ip >= first && ip <= last;
     }
 
@@ -50,6 +54,7 @@ public class IPRange {
                 p = i + 1;
             }
         }
+        result += Long.parseLong(s.substring(p));
         return result;
     }
 }

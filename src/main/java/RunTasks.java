@@ -8,6 +8,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
 
+import static java.lang.Math.max;
 import static java.lang.System.err;
 import static java.lang.System.out;
 
@@ -15,13 +16,18 @@ public class RunTasks {
     final String address = "localhost:8080";
     final ExecutorService pool = Executors.newFixedThreadPool(200);
     final HttpClient client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
-    //final HttpClient client = HttpClient.newHttpClient();
     final AtomicLong errors = new AtomicLong();
     final AtomicLong total = new AtomicLong();
     final Set<Long> done = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    boolean sequential, stopError;
 
     public static void main(String[] args) throws IOException, InterruptedException {
-        new RunTasks().run();
+        new RunTasks(args).run();
+    }
+
+    RunTasks(String[] args) {
+        this.sequential = Arrays.asList(args).contains("-seq");
+        this.stopError = Arrays.asList(args).contains("-stop");
     }
 
     void run() throws IOException, InterruptedException {
@@ -30,8 +36,15 @@ public class RunTasks {
             String line;
             while ((line = input.readLine()) != null) {
                 String finalLine = line;
-                pool.submit(() -> send(finalLine));
+                if (this.sequential) {
+                    send(line);
+                } else {
+                    pool.submit(() -> send(finalLine));
+                }
                 total.addAndGet(1);
+                if (this.stopError && errors.get() > 0) {
+                    break;
+                }
             }
         }
         pool.shutdown();
@@ -39,7 +52,7 @@ public class RunTasks {
         err.println(String.format("%d requests sent in %.2f s, %d errors, %d requests/sec",
             total.get(),
             (System.nanoTime() - started) / 1000000000., errors.get(),
-            total.get() / ((System.nanoTime() - started) / 1000000000))
+            total.get() / max((System.nanoTime() - started) / 1000000000, 1))
         );
     }
 
@@ -100,9 +113,9 @@ public class RunTasks {
                         }
                     }
                 }
-                out.println("" + id + ": " + response.statusCode() + " " + method + " " + uri);
+                out.println("" + id + " " + response.statusCode() + " " + method + " " + uri);
             } catch (IOException | InterruptedException | RuntimeException | ParseException e) {
-                err.println("" + id + ":" + e.getMessage());
+                err.println("" + id + " ERROR: " + e.getMessage());
                 errors.addAndGet(1);
             }
             done.add(id);

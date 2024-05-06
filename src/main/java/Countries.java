@@ -48,7 +48,7 @@ class Countries {
                             continue;
                         }
                         var range = new IPRange(fields.get(0));
-                        this.buckets[(int) (range.first / 0xffffff)].ranges.put(range, Country.fromName(name));
+                        this.buckets[(int) (range.first / 0x1000000)].ranges.put(range, Country.fromName(name));
                         count++;
                     } catch (Exception e) {
                         log.error("error parsing " + line, e);
@@ -83,7 +83,7 @@ class Countries {
     }
 
     Country country(long ip) {
-        for (var e : this.buckets[(int) (ip / 0xffffff)].ranges.entrySet()) {
+        for (var e : this.buckets[(int) (ip / 0x1000000)].ranges.entrySet()) {
             if (e.getKey().contains(ip)) return e.getValue();
         }
         return Country.NO;

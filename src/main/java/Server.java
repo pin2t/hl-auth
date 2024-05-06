@@ -17,10 +17,10 @@ import java.util.function.Consumer;
 
 public class Server {
     static final Logger log = LoggerFactory.getLogger(Server.class);
-    public static final String ALG_HS_256_TYP_JWT = "{\"alg\":\"HS256\",\"typ\": \"JWT\"}";
-    public static final String X_FORWARDED_FOR = "X-FORWARDED-FOR";
-    public static final String X_API_KEY = "X-API-Key";
-    public static final String LOGIN = "login";
+    static final String ALG_HS_256_TYP_JWT = "{\"alg\":\"HS256\",\"typ\": \"JWT\"}";
+    static final String X_FORWARDED_FOR = "X-FORWARDED-FOR";
+    static final String X_API_KEY = "X-API-Key";
+    static final String LOGIN = "login";
 
     final Users users = new Users("/storage/data/users.jsonl", "data/users.jsonl");
     final Algorithm hs256 = Algorithm.HMAC256(Base64.getDecoder().decode("CGWpjarkRIXzCIIw5vXKc+uESy5ebrbOyVMZvftj19k="));
@@ -64,33 +64,39 @@ public class Server {
             var login = (String)json.get(LOGIN);
             var user = users.get(login);
             if (user == null) {
+                log.info("403 user not found \"" + login + "\"");
                 ctx.status(403);
                 return;
             }
             if (!user.password().equals((String)json.get("password"))) {
+                log.info("403 invalid password \"" + (String)json.get("password") + "\"");
                 ctx.status(403);
                 return;
             }
             if (blacklisted.contains(login)) {
+                log.info("403 user blocked \"" + login + "\"");
                 ctx.status(403);
                 return;
             }
             var ip = IPRange.ip(ctx.header(X_FORWARDED_FOR));
             if (blacklistedIPs.contains(ip)) {
+                log.info("403 user ip blocked " + ctx.header(X_FORWARDED_FOR));
                 ctx.status(403);
                 return;
             }
             var country = countries.country(ip);
             if (country != user.country()) {
+                log.info("403 user country does not match \"" + country.name + "\" != \"" + user.country().name + "\"");
                 ctx.status(403);
                 return;
             }
             ctx.json(JWT.create()
                 .withHeader(ALG_HS_256_TYP_JWT)
-                .withPayload("{\"login\":\"" + login + "\",\"nonce\": \"" + (String)json.get("nonce") + "\"}")
+                .withPayload("{\"login\":\"" + login + "\",\"nonce\":\"" + (String)json.get("nonce") + "\"}")
                 .sign(hs256)
             );
         } catch (ParseException e) {
+            log.info("400 JSON parse error " + e.getMessage());
             ctx.status(400);
         }
     }
@@ -107,17 +113,20 @@ public class Server {
             var json = (JSONObject)new JSONParser().parse(ctx.body());
             var login = (String)json.get(LOGIN);
             if (users.get(login) != null) {
+                log.info("409 user not found \"" + login + "\"");
                 ctx.status(409);
                 return;
             }
             var ip = IPRange.ip(ctx.header(X_FORWARDED_FOR));
             if (blacklistedIPs.contains(ip)) {
+                log.info("403 ip blocked " + ctx.header(X_FORWARDED_FOR));
                 ctx.status(403);
                 return;
             }
             users.put(login, new User(json));
             ctx.status(201);
         } catch (ParseException e) {
+            log.info("400 JSON parse error " + e.getMessage());
             ctx.status(400);
         }
     }
@@ -137,6 +146,7 @@ public class Server {
                 users.put(user.login(), new User(json));
                 ctx.status(202);
             } catch (ParseException e) {
+                log.info("400 JSON parse error " + e.getMessage());
                 ctx.status(400);
             }
         });
@@ -147,6 +157,7 @@ public class Server {
             var ip = ctx.pathParam("ip");
             var mask = ctx.pathParam("mask");
             if (blacklistedIPs.contains(ip, mask)) {
+                log.info("409 already blocked " + ip + "/" + mask);
                 ctx.status(409);
                 return;
             }
@@ -160,6 +171,7 @@ public class Server {
             var ip = ctx.pathParam("ip");
             var mask = ctx.pathParam("mask");
             if (!blacklistedIPs.contains(ip, mask)) {
+                log.info("409 not blocked " + ip + "/" + mask);
                 ctx.status(404);
                 return;
             }
@@ -173,12 +185,21 @@ public class Server {
             var login = ctx.pathParam(LOGIN);
             var user = users.get(login);
             if (user == null) {
+                log.info("403 user not found \"" + login + "\"");
                 ctx.status(404);
                 return;
             }
             var ip = IPRange.ip(ctx.header(X_FORWARDED_FOR));
-            if (blacklistedIPs.contains(ip)) { ctx.status(409); return; }
-            if (!blacklisted.add(login)) { ctx.status(409); return; }
+            if (blacklistedIPs.contains(ip)) {
+                log.info("403 ip blocked " + ctx.header(X_FORWARDED_FOR));
+                ctx.status(409);
+                return;
+            }
+            if (!blacklisted.add(login)) {
+                log.info("403 already blocked \"" + login + "\"");
+                ctx.status(409);
+                return;
+            }
             ctx.status(201);
         });
     }
@@ -187,7 +208,13 @@ public class Server {
         runAdmin(ctx, () -> {
             var login = ctx.pathParam(LOGIN);
             var user = users.get(login);
-            if (user == null || !blacklisted.remove(login)) {
+            if (user == null) {
+                log.info("404 user not found \"" + login + "\"");
+                ctx.status(404);
+                return;
+            }
+            if (!blacklisted.remove(login)) {
+                log.info("403 not blocked \"" + login + "\"");
                 ctx.status(404);
                 return;
             }
@@ -202,10 +229,12 @@ public class Server {
             var login = (String)json.get(LOGIN);
             var user = users.get(login);
             if (user == null) {
+                log.info("403 user not found \"" + login + "\"");
                 ctx.status(403);
                 return;
             }
             if (blacklisted.contains(login)) {
+                log.info("403 user blocked \"" + login + "\"");
                 ctx.status(403);
                 return;
             }
@@ -231,16 +260,30 @@ public class Server {
             var json = (JSONObject)new JSONParser().parse(new String(Base64.getDecoder().decode(jwt.getPayload())));
             var login = (String)json.get(LOGIN);
             var admin = users.get(login);
+            if (admin == null) {
+                log.info("403 admin user not found \"" + login + "\"");
+                ctx.status(403);
+                return;
+            }
+            if (!admin.isAdmin()) {
+                log.info("403 user is not admin \"" + login + "\"");
+                ctx.status(403);
+                return;
+            }
+            if (blacklisted.contains(login)) {
+                log.info("403 admin user blocked \"" + login + "\"");
+                ctx.status(403);
+                return;
+            }
             var ip = IPRange.ip(ctx.header(X_FORWARDED_FOR));
-            if (admin == null ||
-                !admin.isAdmin() ||
-                blacklisted.contains(login) ||
-                blacklistedIPs.contains(ip)) {
+            if (blacklistedIPs.contains(ip)) {
+                log.info("403 ip blocked " + ctx.header(X_FORWARDED_FOR));
                 ctx.status(403);
                 return;
             }
             var country = countries.country(ip);
             if (country != admin.country()) {
+                log.info("403 admin country does not match \"" + country.name + "\" != \"" + admin.country().name + "\"");
                 ctx.status(403);
                 return;
             }
