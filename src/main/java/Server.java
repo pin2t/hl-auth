@@ -4,6 +4,7 @@ import com.auth0.jwt.exceptions.JWTVerificationException;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import io.javalin.Javalin;
 import io.javalin.http.*;
+import org.eclipse.jetty.util.thread.*;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
@@ -21,6 +22,9 @@ public class Server {
     static final String X_FORWARDED_FOR = "X-FORWARDED-FOR";
     static final String X_API_KEY = "X-API-Key";
     static final String LOGIN = "login";
+    static final String QLOGIN = "\"login\"";
+    static final String QPASSWORD = "\"password\"";
+    static final String QNONCE = "\"nonce\"";
 
     final Users users = new Users("/storage/data/users.jsonl", "data/users.jsonl");
     final Algorithm hs256 = Algorithm.HMAC256(Base64.getDecoder().decode("CGWpjarkRIXzCIIw5vXKc+uESy5ebrbOyVMZvftj19k="));
@@ -46,8 +50,12 @@ public class Server {
             assert "St Kitts and Nevis".equals(c);
         });
         pool.shutdown();
-        Javalin.create(config -> { config.useVirtualThreads = true; })
-            .post("/auth", this::auth)
+        Javalin.create(config -> {
+            config.http.disableCompression();
+            config.showJavalinBanner = false;
+//            config.useVirtualThreads = true;
+            config.jetty.threadPool = new QueuedThreadPool(4, 4, new LinkedBlockingDeque<>());
+        }).post("/auth", this::auth)
             .get("/user", this::getUser)
             .put("/user", this::createUser)
             .patch("/user", this::updateUser)
@@ -60,16 +68,17 @@ public class Server {
 
     void auth(Context ctx) {
         try {
-            var json = (JSONObject) new JSONParser().parse(ctx.body());
-            var login = (String)json.get(LOGIN);
+            var body = ctx.body();
+            var login = jsonValue(body, QLOGIN);
             var user = users.get(login);
             if (user == null) {
                 log.info("403 user not found \"" + login + "\"");
                 ctx.status(403);
                 return;
             }
-            if (!user.password().equals((String)json.get("password"))) {
-                log.info("403 invalid password \"" + (String)json.get("password") + "\"");
+            var password = jsonValue(body, QPASSWORD);
+            if (!user.password().equals(password)) {
+                log.info("403 invalid password \"" + password + "\"");
                 ctx.status(403);
                 return;
             }
@@ -91,13 +100,14 @@ public class Server {
                 return;
             }
             ctx.contentType(ContentType.APPLICATION_JSON);
-            var payload = "{\"login\":\"" + login + "\",\"nonce\":\"" + (String)json.get("nonce") + "\"}";
+            var nonce = jsonValue(body, QNONCE);
+            var payload = "{\"login\":\"" + login + "\",\"nonce\":\"" + nonce + "\"}";
 //            log.info("/auth JWT header \'" + ALG_HS_256_TYP_JWT + "\"");
 //            log.info("/auth JWT payload \'" + payload + "\"");
             ctx.result("\"" + JWT.create().withHeader(ALG_HS_256_TYP_JWT).withPayload(payload).sign(hs256) + "\"");
             ctx.status(200);
-        } catch (ParseException e) {
-            log.info("400 JSON parse error " + e.getMessage());
+        } catch (Exception e) {
+            log.info("400 unhandled exception " + e.getMessage());
             ctx.status(400);
         }
     }
@@ -111,17 +121,17 @@ public class Server {
 
     void createUser(Context ctx) {
         try {
+            var ip = IPRange.ip(ctx.header(X_FORWARDED_FOR));
+            if (blacklistedIPs.contains(ip)) {
+                log.info("403 ip blocked " + ctx.header(X_FORWARDED_FOR));
+                ctx.status(403);
+                return;
+            }
             var json = (JSONObject)new JSONParser().parse(ctx.body());
             var login = (String)json.get(LOGIN);
             if (users.get(login) != null) {
                 log.info("409 user already exists \"" + login + "\"");
                 ctx.status(409);
-                return;
-            }
-            var ip = IPRange.ip(ctx.header(X_FORWARDED_FOR));
-            if (blacklistedIPs.contains(ip)) {
-                log.info("403 ip blocked " + ctx.header(X_FORWARDED_FOR));
-                ctx.status(403);
                 return;
             }
             users.put(login, new User(json));
@@ -226,8 +236,8 @@ public class Server {
     void runUser(Context ctx, Consumer<User> operation) {
         try {
             DecodedJWT jwt = JWT.require(hs256).build().verify(ctx.header(X_API_KEY));
-            var json = (JSONObject)new JSONParser().parse(new String(Base64.getDecoder().decode(jwt.getPayload())));
-            var login = (String)json.get(LOGIN);
+            var payload = new String(Base64.getDecoder().decode(jwt.getPayload()));
+            var login = jsonValue(payload, QLOGIN);
             var user = users.get(login);
             if (user == null) {
                 log.info("403 user not found \"" + login + "\"");
@@ -250,7 +260,7 @@ public class Server {
                 return;
             }
             operation.accept(user);
-        } catch (JWTVerificationException | ParseException e) {
+        } catch (JWTVerificationException e) {
             ctx.status(403);
         }
     }
@@ -258,8 +268,8 @@ public class Server {
     void runAdmin(Context ctx, Runnable operation) {
         try {
             DecodedJWT jwt = JWT.require(hs256).build().verify(ctx.header(X_API_KEY));
-            var json = (JSONObject)new JSONParser().parse(new String(Base64.getDecoder().decode(jwt.getPayload())));
-            var login = (String)json.get(LOGIN);
+            var payload = new String(Base64.getDecoder().decode(jwt.getPayload()));
+            var login = jsonValue(payload, QLOGIN);
             var admin = users.get(login);
             if (admin == null) {
                 log.info("403 admin user not found \"" + login + "\"");
@@ -289,8 +299,17 @@ public class Server {
                 return;
             }
             operation.run();
-        } catch (JWTVerificationException | ParseException e) {
+        } catch (JWTVerificationException e) {
             ctx.status(403);
         }
+    }
+
+    String jsonValue(String json, String qkey) {
+        int i = json.indexOf(qkey);
+        if (i == -1) return null;
+        int start = i + qkey.length() + 2;
+        int end = json.indexOf('"', start);
+        if (end == -1) return null;
+        return json.substring(start, end);
     }
 }

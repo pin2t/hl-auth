@@ -26,8 +26,8 @@ class Countries {
             var started = System.nanoTime();
             Map<String, String> ids = new HashMap<>(100000);
             try (var reader = new BufferedReader(new FileReader(locationsFile), 1000000)) {
-                String line = reader.readLine();
-                while ((line = reader.readLine()) != null) {
+                reader.readLine();
+                reader.lines().forEach(line -> {
                     try {
                         var fields = csvFields(line);
                         var name = fields.get(5);
@@ -35,27 +35,27 @@ class Countries {
                     } catch (Exception e) {
                         log.error("error parsing " + line, e);
                     }
-                }
+                });
             }
-            long count = 0;
+            long[] count = new long[]{0};
             try (var reader = new BufferedReader(new FileReader(ipsFile), 1000000)) {
-                String line = reader.readLine();
-                while ((line = reader.readLine()) != null) {
+                reader.readLine();
+                reader.lines().forEach(line -> {
                     try {
                         var fields = csvFields(line);
                         var name = ids.get(!fields.get(1).isEmpty() ? fields.get(1) : fields.get(2));
                         if (name == null || name.isEmpty()) {
-                            continue;
+                            return;
                         }
                         var range = new IPRange(fields.get(0));
                         this.buckets[(int) (range.first / 0x1000000)].ranges.put(range, Country.fromName(name));
-                        count++;
+                        count[0]++;
                     } catch (Exception e) {
                         log.error("error parsing " + line, e);
                     }
-                }
+                });
             }
-            log.info(String.format("Loaded %d ranges from %s in %.2f s", count, ipsFile.getCanonicalPath(), (System.nanoTime() - started) / 1000000000.));
+            log.info(String.format("Loaded %d ranges from %s in %.2f s", count[0], ipsFile.getCanonicalPath(), (System.nanoTime() - started) / 1000000000.));
         } catch (Exception e) {
             log.error("unhandled exception", e);
         }

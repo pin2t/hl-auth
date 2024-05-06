@@ -2,15 +2,13 @@ import org.slf4j.*;
 
 import java.util.*;
 
-import static java.lang.Math.min;
-
 public class IPRange {
     static final Logger log = LoggerFactory.getLogger(IPRange.class);
     final long first, last;
-    final String network;
+//    final String network;
 
     IPRange(String network) {
-        this.network = network;
+//        this.network = network;
         var slash = network.indexOf('/');
         assert slash > 0;
         var ip = ip(network.substring(0, slash));

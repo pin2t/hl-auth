@@ -14,8 +14,8 @@ import static java.lang.System.out;
 
 public class RunTasks {
     final String address = "localhost:8080";
-    final ExecutorService pool = Executors.newFixedThreadPool(200);
-    final HttpClient client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
+    final ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor();
+    final HttpClient client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).executor(pool).build();
     final AtomicLong errors = new AtomicLong();
     final AtomicLong total = new AtomicLong();
     final Set<Long> done = Collections.newSetFromMap(new ConcurrentHashMap<>());
@@ -33,8 +33,7 @@ public class RunTasks {
     void run() throws IOException, InterruptedException {
         final long started = System.nanoTime();
         try (var input = new BufferedReader(new FileReader("data/tasks.jsonl"))) {
-            String line;
-            while ((line = input.readLine()) != null) {
+            input.lines().forEach(line -> {
                 String finalLine = line;
                 if (this.sequential) {
                     send(line);
@@ -42,10 +41,17 @@ public class RunTasks {
                     pool.submit(() -> send(finalLine));
                 }
                 total.addAndGet(1);
-                if (this.stopError && errors.get() > 0) {
-                    break;
+                while (total.get() - done.size() >= 5000) {
+                    try {
+                        Thread.sleep(100);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
                 }
-            }
+                if (this.stopError && errors.get() > 0) {
+                    throw new RuntimeException("errors");
+                }
+            });
         }
         pool.shutdown();
         pool.awaitTermination(10, TimeUnit.MINUTES);
