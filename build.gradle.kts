@@ -7,6 +7,7 @@ version = "1.0"
 
 repositories {
     mavenCentral()
+    gradlePluginPortal()
 }
 
 dependencies {
@@ -14,6 +15,7 @@ dependencies {
     implementation("io.javalin:javalin:6.1.3")
     implementation("org.slf4j:slf4j-simple:2.0.10")
     implementation("com.auth0:java-jwt:4.4.0")
+    implementation("net.freeutils:jlhttp:2.4")
     testImplementation(platform("org.junit:junit-bom:5.9.1"))
     testImplementation("org.junit.jupiter:junit-jupiter")
 }

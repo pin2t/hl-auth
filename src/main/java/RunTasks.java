@@ -15,7 +15,7 @@ import static java.lang.System.out;
 public class RunTasks {
     final String address = "localhost:8080";
     final ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor();
-    final HttpClient client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).executor(pool).build();
+    final HttpClient client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
     final AtomicLong errors = new AtomicLong();
     final AtomicLong total = new AtomicLong();
     final Set<Long> done = Collections.newSetFromMap(new ConcurrentHashMap<>());
@@ -41,7 +41,7 @@ public class RunTasks {
                     pool.submit(() -> send(finalLine));
                 }
                 total.addAndGet(1);
-                while (total.get() - done.size() >= 5000) {
+                while (total.get() - done.size() >= 10000) {
                     try {
                         Thread.sleep(100);
                     } catch (InterruptedException e) {
@@ -91,7 +91,7 @@ public class RunTasks {
                     throw new RuntimeException("invalid status code " + response.statusCode() + " expected " + code);
                 }
                 var jsonBody = checks.get("jsonBody");
-                if (jsonBody instanceof String && !("\"" + (String) jsonBody + "\"").equals(response.body())) {
+                if (jsonBody instanceof String && !((String) jsonBody).equals(response.body().substring(1, response.body().length() - 1))) {
                     throw new RuntimeException("invalid body \"" + response.body() + "\" expected \"" + jsonBody + "\"");
                 }
                 if (jsonBody instanceof JSONObject) {
