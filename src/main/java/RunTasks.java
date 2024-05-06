@@ -85,7 +85,7 @@ public class RunTasks {
                     throw new RuntimeException("invalid status code " + response.statusCode() + " expected " + code);
                 }
                 var jsonBody = checks.get("jsonBody");
-                if (jsonBody instanceof String && !((String) jsonBody).equals(response.body())) {
+                if (jsonBody instanceof String && !("\"" + (String) jsonBody + "\"").equals(response.body())) {
                     throw new RuntimeException("invalid body \"" + response.body() + "\" expected \"" + jsonBody + "\"");
                 }
                 if (jsonBody instanceof JSONObject) {

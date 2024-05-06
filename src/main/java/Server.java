@@ -3,7 +3,7 @@ import com.auth0.jwt.algorithms.Algorithm;
 import com.auth0.jwt.exceptions.JWTVerificationException;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import io.javalin.Javalin;
-import io.javalin.http.Context;
+import io.javalin.http.*;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
@@ -17,7 +17,7 @@ import java.util.function.Consumer;
 
 public class Server {
     static final Logger log = LoggerFactory.getLogger(Server.class);
-    static final String ALG_HS_256_TYP_JWT = "{\"alg\":\"HS256\",\"typ\": \"JWT\"}";
+    static final String ALG_HS_256_TYP_JWT = "{\"alg\":\"HS256\",\"typ\":\"JWT\"}";
     static final String X_FORWARDED_FOR = "X-FORWARDED-FOR";
     static final String X_API_KEY = "X-API-Key";
     static final String LOGIN = "login";
@@ -90,11 +90,12 @@ public class Server {
                 ctx.status(403);
                 return;
             }
-            ctx.json(JWT.create()
-                .withHeader(ALG_HS_256_TYP_JWT)
-                .withPayload("{\"login\":\"" + login + "\",\"nonce\":\"" + (String)json.get("nonce") + "\"}")
-                .sign(hs256)
-            );
+            ctx.contentType(ContentType.APPLICATION_JSON);
+            var payload = "{\"login\":\"" + login + "\",\"nonce\":\"" + (String)json.get("nonce") + "\"}";
+//            log.info("/auth JWT header \'" + ALG_HS_256_TYP_JWT + "\"");
+//            log.info("/auth JWT payload \'" + payload + "\"");
+            ctx.result("\"" + JWT.create().withHeader(ALG_HS_256_TYP_JWT).withPayload(payload).sign(hs256) + "\"");
+            ctx.status(200);
         } catch (ParseException e) {
             log.info("400 JSON parse error " + e.getMessage());
             ctx.status(400);
@@ -113,7 +114,7 @@ public class Server {
             var json = (JSONObject)new JSONParser().parse(ctx.body());
             var login = (String)json.get(LOGIN);
             if (users.get(login) != null) {
-                log.info("409 user not found \"" + login + "\"");
+                log.info("409 user already exists \"" + login + "\"");
                 ctx.status(409);
                 return;
             }
@@ -139,7 +140,7 @@ public class Server {
                     json.putIfAbsent("is_admin", user.isAdmin());
                 }
                 json.putIfAbsent(LOGIN, user.login());
-                json.putIfAbsent("country", user.country().name);
+                json.putIfAbsent("country", user.json.get("country"));
                 json.putIfAbsent("password", user.password());
                 json.putIfAbsent("name", user.name());
                 json.putIfAbsent("phone", user.phone());

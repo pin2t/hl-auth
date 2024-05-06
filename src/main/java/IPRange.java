@@ -24,10 +24,10 @@ public class IPRange {
     }
 
     boolean contains(long ip) {
-        boolean result = ip >= first && ip <= last;
-        if (result) {
-            log.info(this.network + " contains " + ip / 0x1000000 + "." + (ip / 0x10000) % 0x100 + "." + (ip / 0x100) % 0x100 + "." + ip % 0x100);
-        }
+//        boolean result = ip >= first && ip <= last;
+//        if (result) {
+//            log.info(this.network + " contains " + ip / 0x1000000 + "." + (ip / 0x10000) % 0x100 + "." + (ip / 0x100) % 0x100 + "." + ip % 0x100);
+//        }
         return ip >= first && ip <= last;
     }
 
