@@ -25,7 +25,7 @@ class Countries {
         try {
             var started = System.nanoTime();
             Map<String, String> ids = new HashMap<>(100000);
-            try (var reader = new BufferedReader(new FileReader(locationsFile), 1000000)) {
+            try (var reader = new BufferedReader(new FileReader(locationsFile))) {
                 reader.readLine();
                 reader.lines().forEach(line -> {
                     try {
@@ -38,7 +38,7 @@ class Countries {
                 });
             }
             long[] count = new long[]{0};
-            try (var reader = new BufferedReader(new FileReader(ipsFile), 1000000)) {
+            try (var reader = new BufferedReader(new FileReader(ipsFile))) {
                 reader.readLine();
                 reader.lines().forEach(line -> {
                     try {
@@ -84,7 +84,9 @@ class Countries {
 
     Country country(long ip) {
         for (var e : this.buckets[(int) (ip / 0x1000000)].ranges.entrySet()) {
-            if (e.getKey().contains(ip)) return e.getValue();
+            if (e.getKey().contains(ip)) {
+                return e.getValue();
+            }
         }
         return Country.NO;
     }

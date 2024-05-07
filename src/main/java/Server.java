@@ -5,7 +5,7 @@ public class Server {
     final Users users = new Users("/storage/data/users.jsonl", "data/users.jsonl");
     final Countries countries = new Countries();
 
-    public static void main(String[] args) throws FileNotFoundException {
+    public static void main(String[] args) {
         new Server().run();
     }
 

@@ -65,42 +65,34 @@ public class JavalinServer {
             var login = jsonValue(body, QLOGIN);
             var user = users.get(login);
             if (user == null) {
-                log.info("403 user not found \"" + login + "\"");
                 ctx.status(403);
                 return;
             }
             var password = jsonValue(body, QPASSWORD);
             if (!user.password().equals(password)) {
-                log.info("403 invalid password \"" + password + "\"");
                 ctx.status(403);
                 return;
             }
             if (blacklisted.contains(login)) {
-                log.info("403 user blocked \"" + login + "\"");
                 ctx.status(403);
                 return;
             }
             var ip = IPRange.ip(ctx.header(X_FORWARDED_FOR));
             if (blacklistedIPs.contains(ip)) {
-                log.info("403 user ip blocked " + ctx.header(X_FORWARDED_FOR));
                 ctx.status(403);
                 return;
             }
             var country = countries.country(ip);
             if (country != user.country()) {
-                log.info("403 user country does not match \"" + country.name + "\" != \"" + user.country().name + "\"");
                 ctx.status(403);
                 return;
             }
             ctx.contentType(ContentType.APPLICATION_JSON);
             var nonce = jsonValue(body, QNONCE);
-            var payload = "{\"login\":\"" + login + "\",\"nonce\":\"" + nonce + "\"}";
-            //            log.info("/auth JWT header \'" + ALG_HS_256_TYP_JWT + "\"");
-            //            log.info("/auth JWT payload \'" + payload + "\"");
-            ctx.result("\"" + JWT.create().withHeader(ALG_HS_256_TYP_JWT).withPayload(payload).sign(hs256) + "\"");
+            var payload = new StringBuilder(128).append("{\"login\":\"").append(login).append("\",\"nonce\":\"").append(nonce).append("\"}");
+            ctx.result("\"" + JWT.create().withHeader(ALG_HS_256_TYP_JWT).withPayload(payload.toString()).sign(hs256) + "\"");
             ctx.status(200);
         } catch (Exception e) {
-            log.info("400 unhandled exception " + e.getMessage());
             ctx.status(400);
         }
     }
@@ -116,21 +108,18 @@ public class JavalinServer {
         try {
             var ip = IPRange.ip(ctx.header(X_FORWARDED_FOR));
             if (blacklistedIPs.contains(ip)) {
-                log.info("403 ip blocked " + ctx.header(X_FORWARDED_FOR));
                 ctx.status(403);
                 return;
             }
             var json = (JSONObject)new JSONParser().parse(ctx.body());
             var login = (String)json.get(LOGIN);
             if (users.get(login) != null) {
-                log.info("409 user already exists \"" + login + "\"");
                 ctx.status(409);
                 return;
             }
             users.put(login, new User(json));
             ctx.status(201);
         } catch (ParseException e) {
-            log.info("400 JSON parse error " + e.getMessage());
             ctx.status(400);
         }
     }
@@ -150,7 +139,6 @@ public class JavalinServer {
                 users.put(user.login(), new User(json));
                 ctx.status(202);
             } catch (ParseException e) {
-                log.info("400 JSON parse error " + e.getMessage());
                 ctx.status(400);
             }
         });
@@ -161,7 +149,6 @@ public class JavalinServer {
             var ip = ctx.pathParam("ip");
             var mask = ctx.pathParam("mask");
             if (blacklistedIPs.contains(ip, mask)) {
-                log.info("409 already blocked " + ip + "/" + mask);
                 ctx.status(409);
                 return;
             }
@@ -175,7 +162,6 @@ public class JavalinServer {
             var ip = ctx.pathParam("ip");
             var mask = ctx.pathParam("mask");
             if (!blacklistedIPs.contains(ip, mask)) {
-                log.info("409 not blocked " + ip + "/" + mask);
                 ctx.status(404);
                 return;
             }
@@ -189,18 +175,15 @@ public class JavalinServer {
             var login = ctx.pathParam(LOGIN);
             var user = users.get(login);
             if (user == null) {
-                log.info("403 user not found \"" + login + "\"");
                 ctx.status(404);
                 return;
             }
             var ip = IPRange.ip(ctx.header(X_FORWARDED_FOR));
             if (blacklistedIPs.contains(ip)) {
-                log.info("403 ip blocked " + ctx.header(X_FORWARDED_FOR));
                 ctx.status(409);
                 return;
             }
             if (!blacklisted.add(login)) {
-                log.info("403 already blocked \"" + login + "\"");
                 ctx.status(409);
                 return;
             }
@@ -213,12 +196,10 @@ public class JavalinServer {
             var login = ctx.pathParam(LOGIN);
             var user = users.get(login);
             if (user == null) {
-                log.info("404 user not found \"" + login + "\"");
                 ctx.status(404);
                 return;
             }
             if (!blacklisted.remove(login)) {
-                log.info("403 not blocked \"" + login + "\"");
                 ctx.status(404);
                 return;
             }
@@ -233,12 +214,10 @@ public class JavalinServer {
             var login = jsonValue(payload, QLOGIN);
             var user = users.get(login);
             if (user == null) {
-                log.info("403 user not found \"" + login + "\"");
                 ctx.status(403);
                 return;
             }
             if (blacklisted.contains(login)) {
-                log.info("403 user blocked \"" + login + "\"");
                 ctx.status(403);
                 return;
             }
@@ -265,29 +244,24 @@ public class JavalinServer {
             var login = jsonValue(payload, QLOGIN);
             var admin = users.get(login);
             if (admin == null) {
-                log.info("403 admin user not found \"" + login + "\"");
                 ctx.status(403);
                 return;
             }
             if (!admin.isAdmin()) {
-                log.info("403 user is not admin \"" + login + "\"");
                 ctx.status(403);
                 return;
             }
             if (blacklisted.contains(login)) {
-                log.info("403 admin user blocked \"" + login + "\"");
                 ctx.status(403);
                 return;
             }
             var ip = IPRange.ip(ctx.header(X_FORWARDED_FOR));
             if (blacklistedIPs.contains(ip)) {
-                log.info("403 ip blocked " + ctx.header(X_FORWARDED_FOR));
                 ctx.status(403);
                 return;
             }
             var country = countries.country(ip);
             if (country != admin.country()) {
-                log.info("403 admin country does not match \"" + country.name + "\" != \"" + admin.country().name + "\"");
                 ctx.status(403);
                 return;
             }
