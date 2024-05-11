@@ -4,7 +4,6 @@ import com.auth0.jwt.exceptions.JWTVerificationException;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import io.javalin.Javalin;
 import io.javalin.http.*;
-import org.eclipse.jetty.util.thread.*;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
@@ -17,7 +16,7 @@ import java.util.concurrent.*;
 import java.util.function.Consumer;
 
 public class JavalinServer {
-    static final Logger log = LoggerFactory.getLogger(Server.class);
+    static final Logger log = LoggerFactory.getLogger(JavalinServer.class);
     static final String ALG_HS_256_TYP_JWT = "{\"alg\":\"HS256\",\"typ\":\"JWT\"}";
     static final String X_FORWARDED_FOR = "X-FORWARDED-FOR";
     static final String X_API_KEY = "X-API-Key";
@@ -47,6 +46,7 @@ public class JavalinServer {
                 config.http.disableCompression();
                 config.showJavalinBanner = false;
                 config.useVirtualThreads = true;
+                config.pvt.jetty.httpConfigurationConfigs.add(c -> c.setHeaderCacheSize(512));
                 //            config.jetty.threadPool = new QueuedThreadPool(4, 4, new LinkedBlockingDeque<>());
             }).post("/auth", this::auth)
             .get("/user", this::getUser)

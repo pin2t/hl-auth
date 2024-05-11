@@ -14,11 +14,11 @@ public class Server {
         pool.submit(users::load);
         pool.submit(countries::load);
         pool.shutdown();
-        try {
-            new JavalinServer(users, countries).run();
-            //        new JLServer(users, countries).run();
-        } catch (FileNotFoundException e) {
-            throw new RuntimeException(e);
-        }
+//        try {
+//            new JavalinServer(users, countries).run();
+//        } catch (FileNotFoundException e) {
+//            throw new RuntimeException(e);
+//        }
+        new JLServer(users, countries).run();
     }
 }
