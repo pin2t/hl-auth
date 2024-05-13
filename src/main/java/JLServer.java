@@ -16,16 +16,18 @@ public class JLServer {
     final Set<String> blacklisted = Collections.newSetFromMap(new ConcurrentHashMap<>());
     final IPRanges blacklistedIPs = new IPRanges();
     final Countries countries;
+    final ExecutorService pool;
 
-    JLServer(Users users, Countries countries) {
+    JLServer(Users users, Countries countries, ExecutorService pool) {
         this.users = users;
         this.countries = countries;
+        this.pool = pool;
     }
 
     void run() {
         HTTPServer server = new HTTPServer(8080);
         try {
-            server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
+            server.setExecutor(pool);
             HTTPServer.VirtualHost host = server.getVirtualHost(null);
             host.addContext("/auth", (rq, rs) -> { auth(rq, rs); return 0; }, "POST");
             host.addContext("/user", user((rq, rs, user) -> { }), "GET");
@@ -84,13 +86,13 @@ public class JLServer {
     }
 
     ContextHandler admin(UserHandler handler) {
-        return (HTTPServer.Request _rq, HTTPServer.Response _rs) -> {
+        return (HTTPServer.Request rq, HTTPServer.Response rs) -> {
             return 0;
         };
     }
 
     ContextHandler user(UserHandler handler) {
-        return (HTTPServer.Request _rq, HTTPServer.Response _rs) -> {
+        return (HTTPServer.Request rq, HTTPServer.Response rs) -> {
             return 0;
         };
     }

@@ -46,7 +46,6 @@ public class JavalinServer {
                 config.http.disableCompression();
                 config.showJavalinBanner = false;
                 config.useVirtualThreads = true;
-                config.pvt.jetty.httpConfigurationConfigs.add(c -> c.setHeaderCacheSize(512));
                 //            config.jetty.threadPool = new QueuedThreadPool(4, 4, new LinkedBlockingDeque<>());
             }).post("/auth", this::auth)
             .get("/user", this::getUser)
