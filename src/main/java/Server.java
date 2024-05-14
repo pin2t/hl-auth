@@ -13,12 +13,12 @@ public class Server {
         ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor();
         pool.submit(users::load);
         pool.submit(countries::load);
-        pool.shutdown();
-        try {
-            new JavalinServer(users, countries).run();
-        } catch (FileNotFoundException e) {
-            throw new RuntimeException(e);
-        }
-//        new JLServer(users, countries, pool).run();
+//        try {
+//            new JavalinServer(users, countries).run();
+//        } catch (FileNotFoundException e) {
+//            throw new RuntimeException(e);
+//        }
+        new JLServer(users, countries, pool).run();
+//        pool.shutdown();
     }
 }

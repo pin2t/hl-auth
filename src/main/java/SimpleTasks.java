@@ -87,6 +87,9 @@ public class SimpleTasks {
                 );
                 Thread.sleep(200);
             }
+            out.printf("\r%d/%d\t%d rps %d errors\t\t\t\r", done.size(), total,
+                done.size() / max((System.nanoTime() - started) / 1000000000, 1), errors.get()
+            );
         } catch (Exception e) {
             err.println("unhandled exception" + e.getMessage());
             throw new RuntimeException(e);
@@ -131,7 +134,7 @@ public class SimpleTasks {
             }
             if (checks.containsKey("jsonBody")) {
                 var jb = checks.get("jsonBody");
-                if (jb instanceof String)     this.checkBody = Optional.of("\"" + (String)jb + "\"");
+                if (jb instanceof String)          this.checkBody = Optional.of("\"" + (String)jb + "\"");
                 else if (jb instanceof JSONObject) this.checkBody = Optional.of(((JSONObject)jb).toJSONString());
                 else this.checkBody = Optional.empty();
             } else {

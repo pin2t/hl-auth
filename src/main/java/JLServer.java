@@ -30,8 +30,8 @@ public class JLServer {
             server.setExecutor(pool);
             HTTPServer.VirtualHost host = server.getVirtualHost(null);
             host.addContext("/auth", (rq, rs) -> { auth(rq, rs); return 0; }, "POST");
-            host.addContext("/user", user((rq, rs, user) -> { }), "GET");
-            host.addContext("/user", user((rq, rs, user) -> { }), "PUT");
+            host.addContext("/user", user((rq, rs, user) -> rs.send(200, user.toJSON())), "GET");
+            host.addContext("/user", (rq, rs) -> { putUser(rq, rs); return 0; }, "PUT");
             host.addContext("/user", user((rq, rs, user) -> { }), "PATCH");
             host.addContext("/blacklist/subnet", admin((rq, rs, user) -> { }), "PUT");
             host.addContext("/blacklist/subnet", admin((rq, rs, user) -> { }), "DELETE");
@@ -54,6 +54,11 @@ public class JLServer {
             var body = rq.getBody();
             var json = (JSONObject) new JSONParser().parse(new InputStreamReader(body));
             var login = (String) json.get(User.LOGIN);
+            if (blacklisted.contains(login)) {
+                log.error("blocked user " + login);
+                rs.send(403, "");
+                return;
+            }
             var user = users.get(login);
             if (user == null) {
                 log.error("user not found " + login);
@@ -66,11 +71,6 @@ public class JLServer {
                 rs.send(403, "");
                 return;
             }
-            if (blacklisted.contains(login)) {
-                log.error("blocked user " + login);
-                rs.send(403, "");
-                return;
-            }
             var country = countries.country(ip);
             if (country != user.country()) {
                 log.error("IP country \"" + country.name + "\" does not match user country \"" + user.country().name + "\"");
@@ -78,26 +78,128 @@ public class JLServer {
                 return;
             }
             rs.getHeaders().add("Content-Type", "application/json");
-            var nonce = (String) json.get("nonce");
-            rs.send(200, new JWT(login, nonce).toJSON());
+            rs.send(200, new JWT(login, (String) json.get("nonce")).toJSON());
         } catch (Exception e) {
             rs.send(400, e.getMessage());
         }
     }
 
+    void putUser(HTTPServer.Request rq, HTTPServer.Response rs) throws IOException {
+        try {
+            var ip = IPRange.ip(rq.getHeaders().get(X_FORWARDED_FOR));
+            if (blacklistedIPs.contains(ip)) {
+                log.error("blocked IP " + ip);
+                rs.send(403, "");
+                return;
+            }
+            var json = (JSONObject)new JSONParser().parse(new InputStreamReader(rq.getBody()));
+            var login = (String)json.get(User.LOGIN);
+            if (users.get(login) != null) {
+                log.error("user already exist " + login);
+                rs.send(409, "");
+                return;
+            }
+            users.put(login, new User(json));
+            rs.send(201, "");
+        } catch (ParseException e) {
+            rs.send(400, "");
+        }
+    }
+
     ContextHandler admin(UserHandler handler) {
         return (HTTPServer.Request rq, HTTPServer.Response rs) -> {
+            var ip = IPRange.ip(rq.getHeaders().get(X_FORWARDED_FOR));
+            if (blacklistedIPs.contains(ip)) {
+                log.error("blocked IP " + ip);
+                rs.send(403, "");
+                return 0;
+            }
+            JWT jwt = new JWT(rq.getHeaders().get((X_API_KEY)));
+            if (!jwt.isValid()) {
+                log.error("JWT is not valid");
+                rs.send(403, "");
+                return 0;
+            }
+            try {
+                var json = (JSONObject) new JSONParser().parse(jwt.payload());
+                var login = (String)json.get(User.LOGIN);
+                if (blacklisted.contains(login)) {
+                    log.error("user " + login + " blocked");
+                    rs.send(403, "");
+                    return 0;
+                }
+                var user = users.get(login);
+                if (user == null) {
+                    log.error("user not found " + login);
+                    rs.send(403, "");
+                    return 0;
+                }
+                if (!user.isAdmin()) {
+                    log.error("user not admin " + login);
+                    rs.send(403, "");
+                    return 0;
+                }
+                var country = countries.country(ip);
+                if (country != user.country()) {
+                    log.error("IP country \"" + country.name + "\" does not match user country \"" + user.country().name + "\"");
+                    rs.send(403, "");
+                    return 0;
+                }
+                handler.handle(rq, rs, user);
+            } catch (ParseException e) {
+                log.error("payload parse error: " + e.getMessage() + ", " + jwt.payload());
+                rs.send(400, e.getMessage());
+                return 0;
+            }
             return 0;
         };
     }
 
     ContextHandler user(UserHandler handler) {
         return (HTTPServer.Request rq, HTTPServer.Response rs) -> {
+            var ip = IPRange.ip(rq.getHeaders().get(X_FORWARDED_FOR));
+            if (blacklistedIPs.contains(ip)) {
+                log.error("blocked IP " + ip);
+                rs.send(403, "");
+                return 0;
+            }
+            JWT jwt = new JWT(rq.getHeaders().get((X_API_KEY)));
+            if (!jwt.isValid()) {
+                log.error("JWT is not valid");
+                rs.send(403, "");
+                return 0;
+            }
+            try {
+                var json = (JSONObject) new JSONParser().parse(jwt.payload());
+                var login = (String)json.get(User.LOGIN);
+                if (blacklisted.contains(login)) {
+                    log.error("user " + login + " blocked");
+                    rs.send(403, "");
+                    return 0;
+                }
+                var user = users.get(login);
+                if (user == null) {
+                    log.error("user not found " + login);
+                    rs.send(403, "");
+                    return 0;
+                }
+                var country = countries.country(ip);
+                if (country != user.country()) {
+                    log.error("IP country \"" + country.name + "\" does not match user country \"" + user.country().name + "\"");
+                    rs.send(403, "");
+                    return 0;
+                }
+                handler.handle(rq, rs, user);
+            } catch (ParseException e) {
+                log.error("payload parse error: " + e.getMessage() + ", " + jwt.payload());
+                rs.send(400, e.getMessage());
+                return 0;
+            }
             return 0;
         };
     }
 
     interface UserHandler {
-        void handle(HTTPServer.Request rq, HTTPServer.Response rs, User user);
+        void handle(HTTPServer.Request rq, HTTPServer.Response rs, User user) throws IOException;
     }
 }

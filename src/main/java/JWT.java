@@ -6,21 +6,25 @@ import java.util.*;
 public class JWT {
     static final String HEADER = "{\"alg\":\"HS256\",\"typ\":\"JWT\"}";
     static final Algorithm hs256 = Algorithm.HMAC256(Base64.getDecoder().decode("CGWpjarkRIXzCIIw5vXKc+uESy5ebrbOyVMZvftj19k="));
-    final String token;
+    final String token, payload;
 
     JWT(String login, String nonce) {
-        this.token = com.auth0.jwt.JWT.create()
-            .withHeader(HEADER)
-            .withPayload("{\"login\":\"" + login + "\",\"nonce\":\"" + nonce + "\"}")
-            .sign(hs256);
+        this.payload = "{\"login\":\"" + login + "\",\"nonce\":\"" + nonce + "\"}";
+        this.token = com.auth0.jwt.JWT.create().withHeader(HEADER).withPayload(payload).sign(hs256);
     }
 
     JWT(String token) {
         this.token = token;
+        String[] items = token.split("\\.");
+        this.payload = new String(Base64.getDecoder().decode(items[1]));
     }
 
     String toJSON() {
         return "\"" + token + "\"";
+    }
+
+    String payload() {
+        return payload;
     }
 
     boolean isValid() {
