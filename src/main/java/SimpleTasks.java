@@ -102,10 +102,12 @@ public class SimpleTasks {
         final Set<Integer> done;
         final long checkCode;
         final Optional<String> checkBody;
-        final Map<String, String> checkHeaders = new HashMap<>();
+        final Map<String, String> checkHeaders = new LinkedHashMap<>();
         final String request;
         final String body;
         final Map<String, String> headers = new LinkedHashMap<>();
+        final Map<String, String> rsHeaders = new LinkedHashMap<>();
+        String statusLine, rsBody;
 
         Task(String t, Set<Integer> done) throws ParseException {
             this.done = done;
@@ -147,26 +149,55 @@ public class SimpleTasks {
         }
 
         boolean run(Socket connection) throws IOException {
-            var rq = new PrintWriter(connection.getOutputStream());
-            try {
-                rq.print(request);
-                headers.forEach((k, v) -> rq.print(k + ": " + v + "\r\n"));
-                rq.print("Host: localhost\r\n");
-                rq.print("Content-Length: " + body.getBytes(StandardCharsets.UTF_8).length + "\r\n");
-                rq.print("Connection: keep-alive\r\n");
-                if (!body.isBlank()) {
-                    rq.print("Content-Type: application/json\r\n");
+            write(connection);
+            read(connection);
+            if ("close".equals(rsHeaders.get("Connection"))) {
+                connection.close();
+            }
+            if (!statusLine.contains(Long.toString(checkCode))) {
+                return error("invalid status code, expected " + checkCode + " got " + statusLine);
+            }
+            for (var h : checkHeaders.entrySet()) {
+                if (!rsHeaders.containsKey(h.getKey())) {
+                    return error("no header " + h.getKey() + " in response");
                 }
-                rq.print("\r\n");
+                var val = rsHeaders.get(h.getKey());
+                if (!val.equals(h.getValue())) {
+                    return error("invalid header " + h.getKey() + " value, expected \"" + h.getValue() + "\" got \"" + val + "\"");
+                }
+            }
+            if (checkBody.isPresent()) {
+                if (!checkBody.get().equals(rsBody)) {
+                    return error("invalid body, expected \"" + checkBody.get() + "\" got \"" + rsBody + "\"");
+                }
+            }
+            return true;
+        }
+
+        void write(Socket connection) throws IOException {
+            var writer = new PrintWriter(connection.getOutputStream());
+            try {
+                writer.print(request);
+                headers.forEach((k, v) -> writer.print(k + ": " + v + "\r\n"));
+                writer.print("Host: localhost\r\n");
+                writer.print("Content-Length: " + body.getBytes(StandardCharsets.UTF_8).length + "\r\n");
+                writer.print("Connection: keep-alive\r\n");
                 if (!body.isBlank()) {
-                    rq.print(body);
+                    writer.print("Content-Type: application/json\r\n");
+                }
+                writer.print("\r\n");
+                if (!body.isBlank()) {
+                    writer.print(body);
                 }
             } finally {
-                rq.flush();
+                writer.flush();
             }
+        }
+
+        void read(Socket connection) throws IOException {
             var rs = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-            var rsHeaders = new LinkedHashMap<String, String>();
-            String statusLine = rs.readLine(), line;
+            this.statusLine = rs.readLine();
+            String line;
             do {
                 line = rs.readLine();
                 if (line != null && line.contains(":")) {
@@ -188,13 +219,7 @@ public class SimpleTasks {
                     }
                 } while (readLen < len);
             }
-            if ("close".equals(rsHeaders.get("Connection"))) {
-                connection.close();
-            }
-            if (!statusLine.contains(Long.toString(checkCode))) {
-                return error("invalid status code, expected " + checkCode + " got " + statusLine);
-            }
-            return true;
+            this.rsBody = rsBody.toString();
         }
 
         boolean error(String message) {

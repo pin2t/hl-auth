@@ -30,32 +30,37 @@ public class JavalinServer {
     final Algorithm hs256 = Algorithm.HMAC256(Base64.getDecoder().decode("CGWpjarkRIXzCIIw5vXKc+uESy5ebrbOyVMZvftj19k="));
     final Set<String> blacklisted = Collections.newSetFromMap(new ConcurrentHashMap<>());
     final IPRanges blacklistedIPs = new IPRanges();
+    final Javalin server;
 
     JavalinServer(Users users, Countries countries) {
         this.users = users;
         this.countries = countries;
+        this.server = Javalin.create(config -> {
+                    config.http.disableCompression();
+                    config.showJavalinBanner = false;
+                    config.useVirtualThreads = true;
+                    //            config.jetty.threadPool = new QueuedThreadPool(4, 4, new LinkedBlockingDeque<>());
+                }).post("/auth", this::auth)
+                .get("/user", this::getUser)
+                .put("/user", this::createUser)
+                .patch("/user", this::updateUser)
+                .put("/blacklist/subnet/{ip}/{mask}", this::block)
+                .delete("/blacklist/subnet/{ip}/{mask}", this::unblock)
+                .put("/blacklist/user/{login}", this::blockUser)
+                .delete("/blacklist/user/{login}", this::unblockUser);
     }
 
-    void run() throws FileNotFoundException {
+    void start() throws FileNotFoundException {
         assert new IPRange("205.161.14.0/23").contains(IPRange.ip("205.161.15.2"));
         assert !new IPRange("46.32.0.0/19").contains(IPRange.ip("46.31.243.46"));
         var bl = new IPRanges();
         bl.add("41.174.0.0", "16");
         assert bl.contains(IPRange.ip("41.174.13.223"));
-        Javalin.create(config -> {
-                config.http.disableCompression();
-                config.showJavalinBanner = false;
-                config.useVirtualThreads = true;
-                //            config.jetty.threadPool = new QueuedThreadPool(4, 4, new LinkedBlockingDeque<>());
-            }).post("/auth", this::auth)
-            .get("/user", this::getUser)
-            .put("/user", this::createUser)
-            .patch("/user", this::updateUser)
-            .put("/blacklist/subnet/{ip}/{mask}", this::block)
-            .delete("/blacklist/subnet/{ip}/{mask}", this::unblock)
-            .put("/blacklist/user/{login}", this::blockUser)
-            .delete("/blacklist/user/{login}", this::unblockUser)
-            .start(8080);
+        server.start(8080);
+    }
+
+    void stop() {
+        server.stop();
     }
 
     void auth(Context ctx) {

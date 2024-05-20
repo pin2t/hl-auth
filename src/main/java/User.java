@@ -35,18 +35,18 @@ public class User {
     String toJSON()    {
         if (json.containsKey(IS_ADMIN)) {
             return "{" +
+                    "\"is_admin\":" + json.get(IS_ADMIN)  + "," +
                     "\"country\":\"" + (String)json.get(COUNTRY) + "\"," +
-                    "\"is_admin\":" + json.get(IS_ADMIN) + "," +
-                    "\"login\":\"" + (String)json.get(LOGIN) + "\"," +
+                    "\"phone\":\"" + (String)json.get(PHONE) + "\"," +
                     "\"name\":\"" + (String)json.get(NAME) + "\"," +
-                    "\"phone\":\"" + (String)json.get(PHONE) + "\"" +
+                    "\"login\":\"" + (String)json.get(LOGIN) + "\"" +
                     "}";
         } else {
             return "{" +
                     "\"country\":\"" + (String)json.get(COUNTRY) + "\"," +
-                    "\"login\":\"" + (String)json.get(LOGIN) + "\"," +
+                    "\"phone\":\"" + (String)json.get(PHONE) + "\"," +
                     "\"name\":\"" + (String)json.get(NAME) + "\"," +
-                    "\"phone\":\"" + (String)json.get(PHONE) + "\"" +
+                    "\"login\":\"" + (String)json.get(LOGIN) + "\"" +
                     "}";
         }
     }

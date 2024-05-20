@@ -1,5 +1,3 @@
-import net.freeutils.httpserver.*;
-import net.freeutils.httpserver.HTTPServer.*;
 import org.json.simple.*;
 import org.json.simple.parser.*;
 import org.slf4j.*;
@@ -17,15 +15,16 @@ public class JLServer {
     final IPRanges blacklistedIPs = new IPRanges();
     final Countries countries;
     final ExecutorService pool;
+    final HTTPServer server;
 
     JLServer(Users users, Countries countries, ExecutorService pool) {
         this.users = users;
         this.countries = countries;
         this.pool = pool;
+        this.server = new HTTPServer(8080);
     }
 
-    void run() {
-        HTTPServer server = new HTTPServer(8080);
+    void start() {
         try {
             server.setExecutor(pool);
             HTTPServer.VirtualHost host = server.getVirtualHost(null);
@@ -33,17 +32,21 @@ public class JLServer {
             host.addContext("/user", this::getUser, "GET");
             host.addContext("/user", this::createUser, "PUT");
             host.addContext("/user", this::updateUser, "PATCH");
-            host.addContext("/blacklist/subnet", this::blockSubnet, "PUT");
-            host.addContext("/blacklist/subnet", this::unblockSubnet, "DELETE");
-            host.addContext("/blacklist/user", this::blockUser, "PUT");
-            host.addContext("/blacklist/user", this::unblockUser, "DELETE");
+            host.addContext("/blacklist/subnet/*", this::blockSubnet, "PUT");
+            host.addContext("/blacklist/subnet/*", this::unblockSubnet, "DELETE");
+            host.addContext("/blacklist/user/*", this::blockUser, "PUT");
+            host.addContext("/blacklist/user/*", this::unblockUser, "DELETE");
             server.start();
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
-    int auth(Request rq, Response rs) throws IOException {
+    void stop() {
+        server.stop();
+    }
+
+    int auth(HTTPServer.Request rq, HTTPServer.Response rs) throws IOException {
         try {
             var ip = IPRange.ip(rq.getHeaders().get(X_FORWARDED_FOR));
             if (blacklistedIPs.contains(ip)) {
@@ -85,12 +88,15 @@ public class JLServer {
         return 0;
     }
 
-    int getUser(Request rq, Response rs) throws IOException {
-        byUser(rq, rs, user -> rs.send(200, user.toJSON()));
+    int getUser(HTTPServer.Request rq, HTTPServer.Response rs) throws IOException {
+        byUser(rq, rs, user -> {
+            rs.getHeaders().add("Content-Type", "application/json");
+            rs.send(200, user.toJSON());
+        });
         return 0;
     }
 
-    int createUser(Request rq, Response rs) throws IOException {
+    int createUser(HTTPServer.Request rq, HTTPServer.Response rs) throws IOException {
         try {
             var ip = IPRange.ip(rq.getHeaders().get(X_FORWARDED_FOR));
             if (blacklistedIPs.contains(ip)) {
@@ -113,42 +119,102 @@ public class JLServer {
         return 0;
     }
 
-    int updateUser(Request rq, Response rs) throws IOException {
+    int updateUser(HTTPServer.Request rq, HTTPServer.Response rs) throws IOException {
         byUser(rq, rs, user -> {
-            rs.send(404, "not implemented");
+            try {
+                var json = (JSONObject)new JSONParser().parse(new InputStreamReader(rq.getBody()));
+                if (user.json.containsKey("is_admin")) {
+                    json.putIfAbsent("is_admin", user.isAdmin());
+                }
+                json.putIfAbsent("login", user.login());
+                json.putIfAbsent("country", user.json.get("country"));
+                json.putIfAbsent("password", user.password());
+                json.putIfAbsent("name", user.name());
+                json.putIfAbsent("phone", user.phone());
+                users.put(user.login(), new User(json));
+                rs.send(202, "");
+            } catch (ParseException e) {
+                rs.send(400, "");
+            }
         });
         return 0;
     }
 
-    int blockSubnet(Request rq, Response rs) throws IOException {
+    int blockSubnet(HTTPServer.Request rq, HTTPServer.Response rs) throws IOException {
         byAdmin(rq, rs, user -> {
-            rs.send(404, "not implemented");
+            var items = rq.getPath().split("/");
+            var ip = items[2];
+            var mask = items[3];
+            log.info("block subnet " + ip + "/" + mask);
+            if (blacklistedIPs.contains(ip, mask)) {
+                rs.send(409, "");
+                return;
+            }
+            blacklistedIPs.add(ip, mask);
+            rs.send(201, "");
         });
         return 0;
     }
 
-    int unblockSubnet(Request rq, Response rs) throws IOException {
+    int unblockSubnet(HTTPServer.Request rq, HTTPServer.Response rs) throws IOException {
         byAdmin(rq, rs, user -> {
-            rs.send(404, "not implemented");
+            var items = rq.getPath().split("/");
+            var ip = items[2];
+            var mask = items[3];
+            log.info("unblock subnet " + ip + "/" + mask);
+            if (!blacklistedIPs.contains(ip, mask)) {
+                rs.send(404, "");
+                return;
+            }
+            blacklistedIPs.remove(ip, mask);
+            rs.send(204, "");
         });
         return 0;
     }
 
-    int blockUser(Request rq, Response rs) throws IOException {
-        byAdmin(rq, rs, user -> {
-            rs.send(404, "not implemented");
+    int blockUser(HTTPServer.Request rq, HTTPServer.Response rs) throws IOException {
+        byAdmin(rq, rs, u -> {
+            var items = rq.getPath().split("/");
+            var login = items[2];
+            log.info("block user " + login);
+            var user = users.get(login);
+            if (user == null) {
+                rs.send(404, "");
+                return;
+            }
+            var ip = IPRange.ip(rq.getHeaders().get(X_FORWARDED_FOR));
+            if (blacklistedIPs.contains(ip)) {
+                rs.send(409, "");
+                return;
+            }
+            if (!blacklisted.add(login)) {
+                rs.send(409, "");
+                return;
+            }
+            rs.send(201, "");
         });
         return 0;
     }
 
-    int unblockUser(Request rq, Response rs) throws IOException {
-        byAdmin(rq, rs, user -> {
-            rs.send(404, "not implemented");
+    int unblockUser(HTTPServer.Request rq, HTTPServer.Response rs) throws IOException {
+        byAdmin(rq, rs, u -> {
+            var items = rq.getPath().split("/");
+            var login = items[2];
+            var user = users.get(login);
+            if (user == null) {
+                rs.send(404, "");
+                return;
+            }
+            if (!blacklisted.remove(login)) {
+                rs.send(404, "");
+                return;
+            }
+            rs.send(204, "");
         });
         return 0;
     }
 
-    void byAdmin(Request rq, Response rs, UserHandler handler) throws IOException {
+    void byAdmin(HTTPServer.Request rq, HTTPServer.Response rs, UserHandler handler) throws IOException {
         var ip = IPRange.ip(rq.getHeaders().get(X_FORWARDED_FOR));
         if (blacklistedIPs.contains(ip)) {
             log.error("blocked IP " + ip);
@@ -193,7 +259,7 @@ public class JLServer {
         }
     }
 
-    void byUser(Request rq, Response rs, UserHandler handler) throws IOException {
+    void byUser(HTTPServer.Request rq, HTTPServer.Response rs, UserHandler handler) throws IOException {
         var ip = IPRange.ip(rq.getHeaders().get(X_FORWARDED_FOR));
         if (blacklistedIPs.contains(ip)) {
             log.error("blocked IP " + ip);
