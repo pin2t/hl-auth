@@ -32,10 +32,10 @@ public class JLServer {
             host.addContext("/user", this::getUser, "GET");
             host.addContext("/user", this::createUser, "PUT");
             host.addContext("/user", this::updateUser, "PATCH");
-            host.addContext("/blacklist/subnet/*", this::blockSubnet, "PUT");
-            host.addContext("/blacklist/subnet/*", this::unblockSubnet, "DELETE");
-            host.addContext("/blacklist/user/*", this::blockUser, "PUT");
-            host.addContext("/blacklist/user/*", this::unblockUser, "DELETE");
+            host.addContext("/blacklist/subnet", this::blockSubnet, "PUT");
+            host.addContext("/blacklist/subnet", this::unblockSubnet, "DELETE");
+            host.addContext("/blacklist/user", this::blockUser, "PUT");
+            host.addContext("/blacklist/user", this::unblockUser, "DELETE");
             server.start();
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -50,7 +50,6 @@ public class JLServer {
         try {
             var ip = IPRange.ip(rq.getHeaders().get(X_FORWARDED_FOR));
             if (blacklistedIPs.contains(ip)) {
-                log.error("blocked IP " + ip);
                 rs.send(403, "");
                 return 0;
             }
@@ -58,25 +57,21 @@ public class JLServer {
             var json = (JSONObject) new JSONParser().parse(new InputStreamReader(body));
             var login = (String) json.get(User.LOGIN);
             if (blacklisted.contains(login)) {
-                log.error("blocked user " + login);
                 rs.send(403, "");
                 return 0;
             }
             var user = users.get(login);
             if (user == null) {
-                log.error("user not found " + login);
                 rs.send(403, "");
                 return 0;
             }
             var password = (String) json.get(User.PASSWORD);
             if (!user.password().equals(password)) {
-                log.error("user password invalid \"" + password + "\"");
                 rs.send(403, "");
                 return 0;
             }
             var country = countries.country(ip);
             if (country != user.country()) {
-                log.error("IP country \"" + country.name + "\" does not match user country \"" + user.country().name + "\"");
                 rs.send(403, "");
                 return 0;
             }
@@ -100,14 +95,12 @@ public class JLServer {
         try {
             var ip = IPRange.ip(rq.getHeaders().get(X_FORWARDED_FOR));
             if (blacklistedIPs.contains(ip)) {
-                log.error("blocked IP " + ip);
                 rs.send(403, "");
                 return 0;
             }
             var json = (JSONObject)new JSONParser().parse(new InputStreamReader(rq.getBody()));
             var login = (String)json.get(User.LOGIN);
             if (users.get(login) != null) {
-                log.error("user already exist " + login);
                 rs.send(409, "");
                 return 0;
             }
@@ -143,9 +136,8 @@ public class JLServer {
     int blockSubnet(HTTPServer.Request rq, HTTPServer.Response rs) throws IOException {
         byAdmin(rq, rs, user -> {
             var items = rq.getPath().split("/");
-            var ip = items[2];
-            var mask = items[3];
-            log.info("block subnet " + ip + "/" + mask);
+            var ip = items[3];
+            var mask = items[4];
             if (blacklistedIPs.contains(ip, mask)) {
                 rs.send(409, "");
                 return;
@@ -159,9 +151,8 @@ public class JLServer {
     int unblockSubnet(HTTPServer.Request rq, HTTPServer.Response rs) throws IOException {
         byAdmin(rq, rs, user -> {
             var items = rq.getPath().split("/");
-            var ip = items[2];
-            var mask = items[3];
-            log.info("unblock subnet " + ip + "/" + mask);
+            var ip = items[3];
+            var mask = items[4];
             if (!blacklistedIPs.contains(ip, mask)) {
                 rs.send(404, "");
                 return;
@@ -175,8 +166,7 @@ public class JLServer {
     int blockUser(HTTPServer.Request rq, HTTPServer.Response rs) throws IOException {
         byAdmin(rq, rs, u -> {
             var items = rq.getPath().split("/");
-            var login = items[2];
-            log.info("block user " + login);
+            var login = items[3];
             var user = users.get(login);
             if (user == null) {
                 rs.send(404, "");
@@ -199,7 +189,7 @@ public class JLServer {
     int unblockUser(HTTPServer.Request rq, HTTPServer.Response rs) throws IOException {
         byAdmin(rq, rs, u -> {
             var items = rq.getPath().split("/");
-            var login = items[2];
+            var login = items[3];
             var user = users.get(login);
             if (user == null) {
                 rs.send(404, "");
@@ -217,13 +207,11 @@ public class JLServer {
     void byAdmin(HTTPServer.Request rq, HTTPServer.Response rs, UserHandler handler) throws IOException {
         var ip = IPRange.ip(rq.getHeaders().get(X_FORWARDED_FOR));
         if (blacklistedIPs.contains(ip)) {
-            log.error("blocked IP " + ip);
             rs.send(403, "");
             return;
         }
         JWT jwt = new JWT(rq.getHeaders().get((X_API_KEY)));
         if (!jwt.isValid()) {
-            log.error("JWT is not valid");
             rs.send(403, "");
             return;
         }
@@ -231,30 +219,25 @@ public class JLServer {
             var json = (JSONObject) new JSONParser().parse(jwt.payload());
             var login = (String)json.get(User.LOGIN);
             if (blacklisted.contains(login)) {
-                log.error("user " + login + " blocked");
                 rs.send(403, "");
                 return;
             }
             var admin = users.get(login);
             if (admin == null) {
-                log.error("user not found " + login);
                 rs.send(403, "");
                 return;
             }
             if (!admin.isAdmin()) {
-                log.error("user not admin " + login);
                 rs.send(403, "");
                 return;
             }
             var country = countries.country(ip);
             if (country != admin.country()) {
-                log.error("IP country \"" + country.name + "\" does not match user country \"" + admin.country().name + "\"");
                 rs.send(403, "");
                 return;
             }
             handler.handle(admin);
         } catch (ParseException e) {
-            log.error("payload parse error: " + e.getMessage() + ", " + jwt.payload());
             rs.send(400, e.getMessage());
         }
     }
@@ -262,13 +245,11 @@ public class JLServer {
     void byUser(HTTPServer.Request rq, HTTPServer.Response rs, UserHandler handler) throws IOException {
         var ip = IPRange.ip(rq.getHeaders().get(X_FORWARDED_FOR));
         if (blacklistedIPs.contains(ip)) {
-            log.error("blocked IP " + ip);
             rs.send(403, "");
             return;
         }
         JWT jwt = new JWT(rq.getHeaders().get((X_API_KEY)));
         if (!jwt.isValid()) {
-            log.error("JWT is not valid");
             rs.send(403, "");
             return;
         }
@@ -276,19 +257,16 @@ public class JLServer {
             var json = (JSONObject) new JSONParser().parse(jwt.payload());
             var login = (String)json.get(User.LOGIN);
             if (blacklisted.contains(login)) {
-                log.error("user " + login + " blocked");
                 rs.send(403, "");
                 return;
             }
             var user = users.get(login);
             if (user == null) {
-                log.error("user not found " + login);
                 rs.send(403, "");
                 return;
             }
             var country = countries.country(ip);
             if (country != user.country()) {
-                log.error("IP country \"" + country.name + "\" does not match user country \"" + user.country().name + "\"");
                 rs.send(403, "");
                 return;
             }

@@ -2064,8 +2064,8 @@ public class HTTPServer {
      * @throws IOException if an error occurs
      */
     protected void handleConnection(InputStream in, OutputStream out) throws IOException {
-        in = new BufferedInputStream(in, 4096);
-        out = new BufferedOutputStream(out, 4096);
+        in = new BufferedInputStream(in, 1024);
+        out = new BufferedOutputStream(out, 1024);
         Request req;
         Response resp;
         do {
@@ -2182,7 +2182,7 @@ public class HTTPServer {
             handleTrace(req, resp);
         } else {
             Set<String> methods = new LinkedHashSet<String>();
-            methods.addAll(Arrays.asList("GET", "HEAD", "TRACE", "OPTIONS", "PUT", "DELETE")); // built-in methods
+            methods.addAll(Arrays.asList("GET", "HEAD", "TRACE", "OPTIONS")); // built-in methods
             // "*" is a special server-wide (no-context) request supported by OPTIONS
             boolean isServerOptions = req.getPath().equals("*") && method.equals("OPTIONS");
             methods.addAll(isServerOptions ? req.getVirtualHost().getMethods() : handlers.keySet());
