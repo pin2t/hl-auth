@@ -1,18 +1,16 @@
-import org.slf4j.*;
+package countries;
 
 import java.util.*;
 
 public class IPRange {
-    static final Logger log = LoggerFactory.getLogger(IPRange.class);
     final long first, last;
-//    final String network;
+    final int mask;
 
-    IPRange(String network) {
-//        this.network = network;
+    public IPRange(String network) {
         var slash = network.indexOf('/');
         assert slash > 0;
         var ip = ip(network.substring(0, slash));
-        var mask = Long.parseLong(network.substring(slash + 1));
+        this.mask = Integer.parseInt(network.substring(slash + 1));
         var first = ip;
         for (var bit = 31 - mask; bit >= 0; bit--) { first &= ~(1L << bit); }
         var last = ip;
@@ -21,11 +19,7 @@ public class IPRange {
         this.last = last;
     }
 
-    boolean contains(long ip) {
-//        boolean result = ip >= first && ip <= last;
-//        if (result) {
-//            log.info(this.network + " contains " + ip / 0x1000000 + "." + (ip / 0x10000) % 0x100 + "." + (ip / 0x100) % 0x100 + "." + ip % 0x100);
-//        }
+    public boolean contains(long ip) {
         return ip >= first && ip <= last;
     }
 
@@ -42,7 +36,7 @@ public class IPRange {
         return Objects.hash(first, last);
     }
 
-    static long ip(String s) {
+    public static long ip(String s) {
         long result = 0;
         int p = 0, j = 0;
         for (int i = 0; i < s.length(); i++) {

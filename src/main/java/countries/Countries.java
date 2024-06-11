@@ -1,17 +1,19 @@
+package countries;
+
 import org.slf4j.*;
 import java.io.*;
 import java.util.*;
 
-class Countries {
+public class Countries {
     static final Logger log = LoggerFactory.getLogger(Countries.class);
     final Bucket[] buckets;
 
-    Countries() {
+    public Countries() {
         this.buckets = new Bucket[256];
         for (var i = 0; i < buckets.length; i++) this.buckets[i] = new Bucket();
     }
 
-    void load() {
+    public void load() {
         var ipsFile = new File("/storage/data/GeoLite2-City-CSV/GeoLite2-City-Blocks-IPv4.csv");
         var locationsFile = new File("/storage/data/GeoLite2-City-CSV/GeoLite2-City-Locations-en.csv");
         if (!ipsFile.exists() || !locationsFile.exists()) {

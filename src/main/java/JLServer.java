@@ -1,3 +1,4 @@
+import countries.*;
 import org.json.simple.*;
 import org.json.simple.parser.*;
 import org.slf4j.*;
@@ -13,11 +14,11 @@ public class JLServer {
     final Users users;
     final Set<String> blacklisted = Collections.newSetFromMap(new ConcurrentHashMap<>());
     final IPRanges blacklistedIPs = new IPRanges();
-    final Countries countries;
+    final TreeCountries countries;
     final ExecutorService pool;
     final HTTPServer server;
 
-    JLServer(Users users, Countries countries, ExecutorService pool) {
+    JLServer(Users users, TreeCountries countries, ExecutorService pool) {
         this.users = users;
         this.countries = countries;
         this.pool = pool;
@@ -70,7 +71,7 @@ public class JLServer {
                 rs.send(403, "");
                 return 0;
             }
-            var country = countries.country(ip);
+            var country = countries.get(ip);
             if (country != user.country()) {
                 rs.send(403, "");
                 return 0;
@@ -231,7 +232,7 @@ public class JLServer {
                 rs.send(403, "");
                 return;
             }
-            var country = countries.country(ip);
+            var country = countries.get(ip);
             if (country != admin.country()) {
                 rs.send(403, "");
                 return;
@@ -265,7 +266,7 @@ public class JLServer {
                 rs.send(403, "");
                 return;
             }
-            var country = countries.country(ip);
+            var country = countries.get(ip);
             if (country != user.country()) {
                 rs.send(403, "");
                 return;

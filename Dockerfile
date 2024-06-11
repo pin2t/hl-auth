@@ -3,4 +3,4 @@ RUN mkdir /app
 COPY build/libs/auth-1.0.jar /app
 #CMD ["java", "-jar", "/app/auth-1.0.jar"]
 #CMD ["java", "-XX:+UseG1GC", "-XX:+UseStringDeduplication", "-Xss256k", "-jar", "/app/auth-1.0.jar"]
-CMD ["java", "-XX:+HeapDumpOnOutOfMemoryError", "-XX:HeapDumpPath=/storage/data/dumps", "-jar", "/app/auth-1.0.jar"]
+CMD ["java", "-XX:+HeapDumpOnOutOfMemoryError", "-XX:HeapDumpPath=/storage/data/dumps", "-XX:+FlightRecorder", "-XX:StartFlightRecording=disk=true,filename=/storage/data/dumps/recording.jfr,maxage=24h,dumponexit=true,path-to-gc-roots=true", "-jar", "/app/auth-1.0.jar"]

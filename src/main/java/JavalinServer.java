@@ -2,6 +2,7 @@ import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
 import com.auth0.jwt.exceptions.JWTVerificationException;
 import com.auth0.jwt.interfaces.DecodedJWT;
+import countries.*;
 import io.javalin.Javalin;
 import io.javalin.http.*;
 import org.json.simple.JSONObject;
@@ -26,13 +27,13 @@ public class JavalinServer {
     static final String QNONCE = "\"nonce\"";
 
     final Users users;
-    final Countries countries;
+    final TreeCountries countries;
     final Algorithm hs256 = Algorithm.HMAC256(Base64.getDecoder().decode("CGWpjarkRIXzCIIw5vXKc+uESy5ebrbOyVMZvftj19k="));
     final Set<String> blacklisted = Collections.newSetFromMap(new ConcurrentHashMap<>());
     final IPRanges blacklistedIPs = new IPRanges();
     final Javalin server;
 
-    JavalinServer(Users users, Countries countries) {
+    JavalinServer(Users users, TreeCountries countries) {
         this.users = users;
         this.countries = countries;
         this.server = Javalin.create(config -> {
@@ -86,7 +87,7 @@ public class JavalinServer {
                 ctx.status(403);
                 return;
             }
-            var country = countries.country(ip);
+            var country = countries.get(ip);
             if (country != user.country()) {
                 ctx.status(403);
                 return;
@@ -230,7 +231,7 @@ public class JavalinServer {
                 ctx.status(403);
                 return;
             }
-            var country = countries.country(ip);
+            var country = countries.get(ip);
             if (country != user.country()) {
                 ctx.status(403);
                 return;
@@ -264,7 +265,7 @@ public class JavalinServer {
                 ctx.status(403);
                 return;
             }
-            var country = countries.country(ip);
+            var country = countries.get(ip);
             if (country != admin.country()) {
                 ctx.status(403);
                 return;
