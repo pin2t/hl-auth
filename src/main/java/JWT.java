@@ -16,7 +16,11 @@ public class JWT {
     JWT(String token) {
         this.token = token;
         String[] items = token.split("\\.");
-        this.payload = new String(Base64.getDecoder().decode(items[1]));
+        if (items.length > 1) {
+            this.payload = new String(Base64.getDecoder().decode(items[1]));
+        } else {
+            this.payload = "";
+        }
     }
 
     String toJSON() {
@@ -31,7 +35,7 @@ public class JWT {
         try {
             com.auth0.jwt.JWT.require(hs256).build().verify(token);
             return true;
-        } catch (SignatureVerificationException e) {
+        } catch (SignatureVerificationException | JWTDecodeException e) {
             return false;
         }
     }

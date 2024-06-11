@@ -85,10 +85,14 @@ public class JLServer {
     }
 
     int getUser(HTTPServer.Request rq, HTTPServer.Response rs) throws IOException {
-        byUser(rq, rs, user -> {
-            rs.getHeaders().add("Content-Type", "application/json");
-            rs.send(200, user.toJSON());
-        });
+        try {
+            byUser(rq, rs, user -> {
+                rs.getHeaders().add("Content-Type", "application/json");
+                rs.send(200, user.toJSON());
+            });
+        } catch (Exception e) {
+            log.error("unhandled exception", e);
+        }
         return 0;
     }
 
@@ -211,7 +215,12 @@ public class JLServer {
             rs.send(403, "");
             return;
         }
-        JWT jwt = new JWT(rq.getHeaders().get((X_API_KEY)));
+        var token = rq.getHeaders().get((X_API_KEY));
+        if (token == null) {
+            rs.send(403, "");
+            return;
+        }
+        JWT jwt = new JWT(token);
         if (!jwt.isValid()) {
             rs.send(403, "");
             return;
@@ -249,7 +258,12 @@ public class JLServer {
             rs.send(403, "");
             return;
         }
-        JWT jwt = new JWT(rq.getHeaders().get((X_API_KEY)));
+        var token = rq.getHeaders().get((X_API_KEY));
+        if (token == null) {
+            rs.send(403, "");
+            return;
+        }
+        JWT jwt = new JWT(token);
         if (!jwt.isValid()) {
             rs.send(403, "");
             return;
