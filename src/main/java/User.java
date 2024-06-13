@@ -1,8 +1,5 @@
 import countries.*;
 import org.json.simple.JSONObject;
-import org.json.simple.parser.*;
-
-import static java.lang.System.out;
 
 public class User {
     static final String PASSWORD = "password";
