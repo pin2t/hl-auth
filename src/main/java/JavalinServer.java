@@ -69,12 +69,12 @@ public class JavalinServer {
             var body = ctx.body();
             var login = jsonValue(body, QLOGIN);
             var user = users.get(login);
-            if (user == null) {
+            if (user.isEmpty()) {
                 ctx.status(403);
                 return;
             }
             var password = jsonValue(body, QPASSWORD);
-            if (!user.password().equals(password)) {
+            if (!user.get().password().equals(password)) {
                 ctx.status(403);
                 return;
             }
@@ -88,7 +88,7 @@ public class JavalinServer {
                 return;
             }
             var country = countries.get(ip);
-            if (country != user.country()) {
+            if (country != user.get().country()) {
                 ctx.status(403);
                 return;
             }
@@ -133,11 +133,11 @@ public class JavalinServer {
         runUser(ctx, user -> {
             try {
                 var json = (JSONObject)new JSONParser().parse(ctx.body());
-                if (user.json.containsKey("is_admin")) {
+                if (user.isAdmin()) {
                     json.putIfAbsent("is_admin", user.isAdmin());
                 }
                 json.putIfAbsent(LOGIN, user.login());
-                json.putIfAbsent("country", user.json.get("country"));
+                json.putIfAbsent("country", user.country().name);
                 json.putIfAbsent("password", user.password());
                 json.putIfAbsent("name", user.name());
                 json.putIfAbsent("phone", user.phone());
@@ -218,7 +218,7 @@ public class JavalinServer {
             var payload = new String(Base64.getDecoder().decode(jwt.getPayload()));
             var login = jsonValue(payload, QLOGIN);
             var user = users.get(login);
-            if (user == null) {
+            if (user.isEmpty()) {
                 ctx.status(403);
                 return;
             }
@@ -232,11 +232,11 @@ public class JavalinServer {
                 return;
             }
             var country = countries.get(ip);
-            if (country != user.country()) {
+            if (country != user.get().country()) {
                 ctx.status(403);
                 return;
             }
-            operation.accept(user);
+            operation.accept(user.get());
         } catch (JWTVerificationException e) {
             ctx.status(403);
         }
@@ -248,11 +248,11 @@ public class JavalinServer {
             var payload = new String(Base64.getDecoder().decode(jwt.getPayload()));
             var login = jsonValue(payload, QLOGIN);
             var admin = users.get(login);
-            if (admin == null) {
+            if (admin.isEmpty()) {
                 ctx.status(403);
                 return;
             }
-            if (!admin.isAdmin()) {
+            if (!admin.get().isAdmin()) {
                 ctx.status(403);
                 return;
             }
@@ -266,7 +266,7 @@ public class JavalinServer {
                 return;
             }
             var country = countries.get(ip);
-            if (country != admin.country()) {
+            if (country != admin.get().country()) {
                 ctx.status(403);
                 return;
             }

@@ -2,6 +2,8 @@ import countries.*;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.*;
 
+import static java.lang.System.out;
+
 public class User {
     static final String PASSWORD = "password";
     static final String LOGIN = "login";
@@ -9,46 +11,42 @@ public class User {
     static final String NAME = "name";
     static final String PHONE = "phone";
     static final String IS_ADMIN = "is_admin";
-    final String password;
-    final JSONObject json;
+    static final String IS_ADMIN_TRUE = "\"is_admin\":true,";
+    static final String COUNTRY1 = "\"country\":\"";
+    static final String PHONE1 = "\",\"phone\":\"";
+    static final String NAME1 = "\",\"name\":\"";
+    static final String LOGIN1 = "\",\"login\":\"";
+    final String name, login, password, phone;
+    final Country country;
+    final boolean isAdmin;
 
     public User(JSONObject json) {
-        this.json = json;
+        this.name = (String)json.get(NAME);
+        this.login = (String)json.get(LOGIN);
         this.password = (String)json.get(PASSWORD);
-    }
-
-    public User(String json) {
-        try {
-            this.json = (JSONObject) new JSONParser().parse(json);
-            this.password = (String)this.json.get(PASSWORD);
-        } catch (ParseException e) {
-            throw new RuntimeException(e);
-        }
+        this.phone = (String)json.get(PHONE);
+        this.country = Country.fromName((String)json.get(COUNTRY));
+        this.isAdmin = (Boolean)json.getOrDefault(IS_ADMIN, false);
     }
 
     String password()  { return this.password; }
-    String login()     { return (String)json.get(LOGIN); }
-    Country country()  { return Country.fromName((String)json.get(COUNTRY)); }
-    String name()      { return (String)json.get(NAME); }
-    String phone()     { return (String)json.get(PHONE); }
-    boolean isAdmin()  { return (Boolean)json.getOrDefault(IS_ADMIN, false); }
+    String login()     { return this.login; }
+    Country country()  { return this.country; }
+    String name()      { return this.name; }
+    String phone()     { return this.phone; }
+    boolean isAdmin()  { return this.isAdmin; }
 
     String toJSON()    {
-        if (json.containsKey(IS_ADMIN)) {
-            return "{" +
-                    "\"is_admin\":" + json.get(IS_ADMIN)  + "," +
-                    "\"country\":\"" + (String)json.get(COUNTRY) + "\"," +
-                    "\"phone\":\"" + (String)json.get(PHONE) + "\"," +
-                    "\"name\":\"" + (String)json.get(NAME) + "\"," +
-                    "\"login\":\"" + (String)json.get(LOGIN) + "\"" +
-                    "}";
-        } else {
-            return "{" +
-                    "\"country\":\"" + (String)json.get(COUNTRY) + "\"," +
-                    "\"phone\":\"" + (String)json.get(PHONE) + "\"," +
-                    "\"name\":\"" + (String)json.get(NAME) + "\"," +
-                    "\"login\":\"" + (String)json.get(LOGIN) + "\"" +
-                    "}";
+        StringBuilder json = new StringBuilder(100);
+        json.append('{');
+        if (isAdmin) {
+            json.append(IS_ADMIN_TRUE);
         }
+        json.append(COUNTRY1).append( this.country.name)
+                .append(PHONE1).append(this.phone)
+                .append(NAME1).append(this.name)
+                .append(LOGIN1).append(this.login)
+                .append("\"}");
+        return json.toString();
     }
 }

@@ -17,10 +17,10 @@ public class Server {
         ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor();
         pool.submit(users::load);
         pool.submit(() -> {
-            var file = new GeoLite2Countries("/storage/data/GeoLite2-City-CSV/GeoLite2-City-Blocks-IPv4.csv", "/storage/data/GeoLite2-City-CSV/GeoLite2-City-Locations-en.csv");
-            file.forEach((range, country) -> countries.put(range, country));
-            file = new GeoLite2Countries("data/GeoLite2-City-CSV/GeoLite2-City-Blocks-IPv4.csv", "data/GeoLite2-City-CSV/GeoLite2-City-Locations-en.csv");
-            file.forEach((range, country) -> countries.put(range, country));
+            var geolite = new GeoLite2Countries("/storage/data/GeoLite2-City-CSV/GeoLite2-City-Blocks-IPv4.csv", "/storage/data/GeoLite2-City-CSV/GeoLite2-City-Locations-en.csv");
+            geolite.forEach((range, country) -> countries.put(range, country));
+            geolite = new GeoLite2Countries("data/GeoLite2-City-CSV/GeoLite2-City-Blocks-IPv4.csv", "data/GeoLite2-City-CSV/GeoLite2-City-Locations-en.csv");
+            geolite.forEach((range, country) -> countries.put(range, country));
         });
 //        var server = new JavalinServer(users, countries);
         var server = new JLServer(users, countries, pool);

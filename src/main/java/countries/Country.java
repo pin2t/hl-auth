@@ -47,6 +47,7 @@ public enum Country {
     SAINTMARTIN("Saint Martin"),
     MALAWI("Malawi"),
     COCOSKEELINGISLANDS("Cocos (Keeling), Islands"),
+    COCOSKEELINGISLANDS2("Cocos (Keeling) Islands"),
     ANDORRA("Andorra"),
     LIECHTENSTEIN("Liechtenstein"),
     POLAND("Poland"),
@@ -262,7 +263,7 @@ public enum Country {
         }
     }
 
-    final String name;
+    public final String name;
 
     Country(String name) {
         this.name = name;

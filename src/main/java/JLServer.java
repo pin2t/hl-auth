@@ -62,17 +62,17 @@ public class JLServer {
                 return 0;
             }
             var user = users.get(login);
-            if (user == null) {
+            if (user.isEmpty()) {
                 rs.send(403, "");
                 return 0;
             }
             var password = (String) json.get(User.PASSWORD);
-            if (!user.password().equals(password)) {
+            if (!user.get().password().equals(password)) {
                 rs.send(403, "");
                 return 0;
             }
             var country = countries.get(ip);
-            if (country != user.country()) {
+            if (country != user.get().country()) {
                 rs.send(403, "");
                 return 0;
             }
@@ -105,10 +105,11 @@ public class JLServer {
             }
             var json = (JSONObject)new JSONParser().parse(new InputStreamReader(rq.getBody()));
             var login = (String)json.get(User.LOGIN);
-            if (users.get(login) != null) {
+            if (users.get(login).isPresent()) {
                 rs.send(409, "");
                 return 0;
             }
+            json.remove("is_admin");
             users.put(login, new User(json));
             rs.send(201, "");
         } catch (ParseException e) {
@@ -121,11 +122,12 @@ public class JLServer {
         byUser(rq, rs, user -> {
             try {
                 var json = (JSONObject)new JSONParser().parse(new InputStreamReader(rq.getBody()));
-                if (user.json.containsKey("is_admin")) {
+                json.remove("is_admin");
+                if (user.isAdmin()) {
                     json.putIfAbsent("is_admin", user.isAdmin());
                 }
                 json.putIfAbsent("login", user.login());
-                json.putIfAbsent("country", user.json.get("country"));
+                json.putIfAbsent("country", user.country().name);
                 json.putIfAbsent("password", user.password());
                 json.putIfAbsent("name", user.name());
                 json.putIfAbsent("phone", user.phone());
@@ -173,7 +175,7 @@ public class JLServer {
             var items = rq.getPath().split("/");
             var login = items[3];
             var user = users.get(login);
-            if (user == null) {
+            if (user.isEmpty()) {
                 rs.send(404, "");
                 return;
             }
@@ -196,7 +198,7 @@ public class JLServer {
             var items = rq.getPath().split("/");
             var login = items[3];
             var user = users.get(login);
-            if (user == null) {
+            if (user.isEmpty()) {
                 rs.send(404, "");
                 return;
             }
@@ -233,20 +235,20 @@ public class JLServer {
                 return;
             }
             var admin = users.get(login);
-            if (admin == null) {
+            if (admin.isEmpty()) {
                 rs.send(403, "");
                 return;
             }
-            if (!admin.isAdmin()) {
+            if (!admin.get().isAdmin()) {
                 rs.send(403, "");
                 return;
             }
             var country = countries.get(ip);
-            if (country != admin.country()) {
+            if (country != admin.get().country()) {
                 rs.send(403, "");
                 return;
             }
-            handler.handle(admin);
+            handler.handle(admin.get());
         } catch (ParseException e) {
             rs.send(400, e.getMessage());
         }
@@ -276,16 +278,16 @@ public class JLServer {
                 return;
             }
             var user = users.get(login);
-            if (user == null) {
+            if (user.isEmpty()) {
                 rs.send(403, "");
                 return;
             }
             var country = countries.get(ip);
-            if (country != user.country()) {
+            if (country != user.get().country()) {
                 rs.send(403, "");
                 return;
             }
-            handler.handle(user);
+            handler.handle(user.get());
         } catch (ParseException e) {
             log.error("payload parse error: " + e.getMessage() + ", " + jwt.payload());
             rs.send(400, e.getMessage());

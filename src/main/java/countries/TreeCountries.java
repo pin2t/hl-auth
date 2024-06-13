@@ -1,11 +1,8 @@
 package countries;
 
-import org.slf4j.*;
-
 import java.util.*;
 
 public class TreeCountries {
-    static final Logger log = LoggerFactory.getLogger(Countries.class);
     final Node root;
 
     public TreeCountries() {

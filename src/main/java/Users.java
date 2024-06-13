@@ -3,7 +3,7 @@ import org.json.simple.parser.*;
 import org.slf4j.*;
 
 import java.io.*;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.*;
 
 public class Users {
@@ -23,7 +23,7 @@ public class Users {
             var started = System.nanoTime();
             var prevSize = users.size();
             try {
-                JSONParser parser = new JSONParser();
+                var parser = new JSONParser();
                 new BufferedReader(new InputStreamReader(new FileInputStream(f))).lines().forEach(line -> {
                     try {
                         var json = (JSONObject)parser.parse(line);
@@ -44,7 +44,7 @@ public class Users {
         users.put(login, user);
     }
 
-    public User get(String login) {
-        return users.get(login);
+    public Optional<User> get(String login) {
+        return Optional.ofNullable(users.get(login));
     }
 }

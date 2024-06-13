@@ -40,7 +40,7 @@ public class SimpleTasks {
             });
             var total = tasks.size();
             var threads = Executors.newVirtualThreadPerTaskExecutor();
-            for (int i = 0; i < (sequential ? 1 : 200); i++) {
+            for (int i = 0; i < (sequential ? 1 : 100); i++) {
                 threads.submit(() -> {
                     try {
                         Socket connection = new Socket(InetAddress.getByName("localhost"), 8080);
