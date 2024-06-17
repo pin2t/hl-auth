@@ -62,11 +62,11 @@ public class GeoLite2Countries {
         char[] chars = line.toCharArray();
         List<String> result = new ArrayList<>(16);
         int p = 0;
-        boolean inside = false;
+        boolean inString = false;
         for (int i = 0; i < chars.length; i++) {
             if (chars[i] == '"') {
-                inside = !inside;
-            } else if (chars[i] == ',' && !inside) {
+                inString = !inString;
+            } else if (chars[i] == ',' && !inString) {
                 var s = line.substring(p, i);
                 if (!s.isEmpty() && s.charAt(0) == '"') {
                     result.add(s.substring(1, s.length() - 1));

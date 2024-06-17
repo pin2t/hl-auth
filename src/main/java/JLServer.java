@@ -11,6 +11,9 @@ public class JLServer {
     static final Logger log = LoggerFactory.getLogger(JLServer.class);
     static final String X_FORWARDED_FOR = "X-FORWARDED-FOR";
     static final String X_API_KEY = "X-API-Key";
+    static final String CONTENT_TYPE = "Content-Type";
+    static final String CONTENT_TYPE1 = "application/json";
+    static final String NONCE = "\"nonce\":";
     final Users users;
     final Set<String> blacklisted = Collections.newSetFromMap(new ConcurrentHashMap<>());
     final IPRanges blacklistedIPs = new IPRanges();
@@ -54,9 +57,8 @@ public class JLServer {
                 rs.send(403, "");
                 return 0;
             }
-            var body = rq.getBody();
-            var json = (JSONObject) new JSONParser().parse(new InputStreamReader(body));
-            var login = (String) json.get(User.LOGIN);
+            var json = new JSONString(new Scanner(rq.getBody()).useDelimiter("\\A").next());
+            var login = json.field(User.LOGIN_PREF);
             if (blacklisted.contains(login)) {
                 rs.send(403, "");
                 return 0;
@@ -66,7 +68,7 @@ public class JLServer {
                 rs.send(403, "");
                 return 0;
             }
-            if (!user.get().isValid((String) json.get(User.PASSWORD))) {
+            if (!user.get().isValid(json.field(User.PASSWORD_PREF))) {
                 rs.send(403, "");
                 return 0;
             }
@@ -75,8 +77,8 @@ public class JLServer {
                 rs.send(403, "");
                 return 0;
             }
-            rs.getHeaders().add("Content-Type", "application/json");
-            rs.send(200, new JWT(login, (String) json.get("nonce")).toJSON());
+            rs.getHeaders().add(CONTENT_TYPE, CONTENT_TYPE1);
+            rs.send(200, new JWT(login, json.field(NONCE)).toJSON());
         } catch (Exception e) {
             rs.send(400, e.getMessage());
         }
@@ -86,7 +88,7 @@ public class JLServer {
     int getUser(HTTPServer.Request rq, HTTPServer.Response rs) throws IOException {
         try {
             byUser(rq, rs, user -> {
-                rs.getHeaders().add("Content-Type", "application/json");
+                rs.getHeaders().add(CONTENT_TYPE, CONTENT_TYPE1);
                 rs.send(200, user.toJSON());
             });
         } catch (Exception e) {
