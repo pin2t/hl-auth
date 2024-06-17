@@ -140,10 +140,14 @@ public class SimpleTasks {
                     this.checkBody = Optional.of("\"" + (String)jb + "\"");
                 } else if (jb instanceof JSONObject) {
                     var o = (JSONObject)jb;
-                    this.checkBody = Optional.of("{\"login\":\"" + o.get("login").toString() + "\"," +
+                    var fields = "\"login\":\"" + o.get("login").toString() + "\"," +
                         "\"name\":\"" + o.get("name").toString() + "\"," +
                         "\"phone\":\"" + o.get("phone").toString() + "\"," +
-                        "\"country\":\"" + o.get("country").toString() + "\"}");
+                        "\"country\":\"" + o.get("country").toString() + "\"";
+                    if (o.containsKey("is_admin")) {
+                        fields = fields + ",\"is_admin\":true";
+                    }
+                    this.checkBody = Optional.of("{" + fields + "}");
                 } else {
                     this.checkBody = Optional.empty();
                 }

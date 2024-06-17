@@ -23,15 +23,9 @@ public class Users {
             var started = System.nanoTime();
             var prevSize = users.size();
             try {
-                var parser = new JSONParser();
                 new BufferedReader(new InputStreamReader(new FileInputStream(f))).lines().forEach(line -> {
-                    try {
-                        var json = (JSONObject)parser.parse(line);
-                        var login = (String)json.get("login");
-                        users.put(login, new User(line));
-                    } catch (ParseException e) {
-                        log.warn("Error parsing " + line, e);
-                    }
+                    var user = new User(line);
+                    users.put(user.login(), user);
                 });
             } catch (FileNotFoundException e) {
                 log.error("error loading users from " + name, e);
