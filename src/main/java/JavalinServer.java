@@ -74,7 +74,7 @@ public class JavalinServer {
                 return;
             }
             var password = jsonValue(body, QPASSWORD);
-            if (!user.get().password().equals(password)) {
+            if (!user.get().isValid(password)) {
                 ctx.status(403);
                 return;
             }
@@ -122,7 +122,7 @@ public class JavalinServer {
                 ctx.status(409);
                 return;
             }
-            users.put(login, new User(json));
+            users.put(login, new User(json.toJSONString()));
             ctx.status(201);
         } catch (ParseException e) {
             ctx.status(400);
@@ -131,21 +131,21 @@ public class JavalinServer {
 
     void updateUser(Context ctx) {
         runUser(ctx, user -> {
-            try {
-                var json = (JSONObject)new JSONParser().parse(ctx.body());
-                if (user.isAdmin()) {
-                    json.putIfAbsent("is_admin", user.isAdmin());
-                }
-                json.putIfAbsent(LOGIN, user.login());
-                json.putIfAbsent("country", user.country().name);
-                json.putIfAbsent("password", user.password());
-                json.putIfAbsent("name", user.name());
-                json.putIfAbsent("phone", user.phone());
-                users.put(user.login(), new User(json));
-                ctx.status(202);
-            } catch (ParseException e) {
-                ctx.status(400);
-            }
+//            try {
+//                var json = (JSONObject)new JSONParser().parse(ctx.body());
+//                if (user.isAdmin()) {
+//                    json.putIfAbsent("is_admin", user.isAdmin());
+//                }
+//                json.putIfAbsent(LOGIN, user.login());
+//                json.putIfAbsent("country", user.country().name);
+//                json.putIfAbsent("password", user.password());
+//                json.putIfAbsent("name", user.name());
+//                json.putIfAbsent("phone", user.phone());
+//                users.put(user.login(), new User(json));
+//                ctx.status(202);
+//            } catch (ParseException e) {
+//                ctx.status(400);
+//            }
         });
     }
 

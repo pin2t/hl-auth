@@ -66,8 +66,7 @@ public class JLServer {
                 rs.send(403, "");
                 return 0;
             }
-            var password = (String) json.get(User.PASSWORD);
-            if (!user.get().password().equals(password)) {
+            if (!user.get().isValid((String) json.get(User.PASSWORD))) {
                 rs.send(403, "");
                 return 0;
             }
@@ -97,41 +96,28 @@ public class JLServer {
     }
 
     int createUser(HTTPServer.Request rq, HTTPServer.Response rs) throws IOException {
-        try {
-            var ip = IPRange.ip(rq.getHeaders().get(X_FORWARDED_FOR));
-            if (blacklistedIPs.contains(ip)) {
-                rs.send(403, "");
-                return 0;
-            }
-            var json = (JSONObject)new JSONParser().parse(new InputStreamReader(rq.getBody()));
-            var login = (String)json.get(User.LOGIN);
-            if (users.get(login).isPresent()) {
-                rs.send(409, "");
-                return 0;
-            }
-            json.remove("is_admin");
-            users.put(login, new User(json));
-            rs.send(201, "");
-        } catch (ParseException e) {
-            rs.send(400, "");
+        var ip = IPRange.ip(rq.getHeaders().get(X_FORWARDED_FOR));
+        if (blacklistedIPs.contains(ip)) {
+            rs.send(403, "");
+            return 0;
         }
+        var json = new JSONString(new Scanner(rq.getBody()).useDelimiter("\\A").next());
+        var login = json.field(User.LOGIN_PREF);
+        if (users.get(login).isPresent()) {
+            rs.send(409, "");
+            return 0;
+        }
+        var removed = json.removeBoolean(User.IS_ADMIN_PREF);
+        users.put(login, new User(removed.first().toJSON()));
+        rs.send(201, "");
         return 0;
     }
 
     int updateUser(HTTPServer.Request rq, HTTPServer.Response rs) throws IOException {
         byUser(rq, rs, user -> {
             try {
-                var json = (JSONObject)new JSONParser().parse(new InputStreamReader(rq.getBody()));
-                json.remove("is_admin");
-                if (user.isAdmin()) {
-                    json.putIfAbsent("is_admin", user.isAdmin());
-                }
-                json.putIfAbsent("login", user.login());
-                json.putIfAbsent("country", user.country().name);
-                json.putIfAbsent("password", user.password());
-                json.putIfAbsent("name", user.name());
-                json.putIfAbsent("phone", user.phone());
-                users.put(user.login(), new User(json));
+                var json = new Scanner(rq.getBody()).useDelimiter("\\A").next();
+                users.put(user.login(), new User(user, json));
                 rs.send(202, "");
             } catch (ParseException e) {
                 rs.send(400, "");

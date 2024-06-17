@@ -2064,8 +2064,8 @@ public class HTTPServer {
      * @throws IOException if an error occurs
      */
     protected void handleConnection(InputStream in, OutputStream out) throws IOException {
-        in = new BufferedInputStream(in, 1024);
-        out = new BufferedOutputStream(out, 1024);
+        in = new BufferedInputStream(in, 512);
+        out = new BufferedOutputStream(out, 512);
         Request req;
         Response resp;
         do {

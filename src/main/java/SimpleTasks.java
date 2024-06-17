@@ -136,9 +136,17 @@ public class SimpleTasks {
             }
             if (checks.containsKey("jsonBody")) {
                 var jb = checks.get("jsonBody");
-                if (jb instanceof String)          this.checkBody = Optional.of("\"" + (String)jb + "\"");
-                else if (jb instanceof JSONObject) this.checkBody = Optional.of(((JSONObject)jb).toJSONString());
-                else this.checkBody = Optional.empty();
+                if (jb instanceof String) {
+                    this.checkBody = Optional.of("\"" + (String)jb + "\"");
+                } else if (jb instanceof JSONObject) {
+                    var o = (JSONObject)jb;
+                    this.checkBody = Optional.of("{\"login\":\"" + o.get("login").toString() + "\"," +
+                        "\"name\":\"" + o.get("name").toString() + "\"," +
+                        "\"phone\":\"" + o.get("phone").toString() + "\"," +
+                        "\"country\":\"" + o.get("country").toString() + "\"}");
+                } else {
+                    this.checkBody = Optional.empty();
+                }
             } else {
                 this.checkBody = Optional.empty();
             }

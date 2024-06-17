@@ -28,7 +28,7 @@ public class Users {
                     try {
                         var json = (JSONObject)parser.parse(line);
                         var login = (String)json.get("login");
-                        users.put(login, new User(json));
+                        users.put(login, new User(line));
                     } catch (ParseException e) {
                         log.warn("Error parsing " + line, e);
                     }
