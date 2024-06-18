@@ -3,161 +3,159 @@ import org.json.simple.parser.*;
 
 import java.io.*;
 import java.net.*;
-import java.net.http.*;
+import java.nio.charset.*;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
-import java.util.stream.*;
 
 import static java.lang.Math.max;
 import static java.lang.System.err;
 import static java.lang.System.out;
 
 public class Tasks {
-    final AtomicLong errors = new AtomicLong();
+    final boolean stopOnError, sequential;
     final Set<Integer> done = Collections.newSetFromMap(new ConcurrentHashMap<>());
-    final HttpClient client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
-    final boolean sequential, stopError;
-    final LinkedBlockingDeque<Task> postponed = new LinkedBlockingDeque<>();
+    final AtomicLong errors = new AtomicLong();
 
-    public static void main(String[] args) throws InterruptedException {
+    public static void main(String[] args) {
         new Tasks(args).run();
     }
 
     Tasks(String[] args) {
         this.sequential = Arrays.asList(args).contains("-seq");
-        this.stopError = Arrays.asList(args).contains("-stop");
+        this.stopOnError = Arrays.asList(args).contains("-stop");
     }
 
-    void run() throws InterruptedException {
-        final long started = System.nanoTime();
-        List<CompletableFuture<Boolean>> futures = new ArrayList<>();
-        var total = 1;
-        try (var input = new BufferedReader(new FileReader("data/tasks.jsonl"))) {
-            var lines = input.lines().collect(Collectors.toList());
-            total = lines.size();
-            for (var line : lines) {
-                if (stopError && errors.get() > 0) {
-                    break;
-                }
-                var task = new Task(line, client, done);
-                if (sequential) {
-                    try {
-                        task.run().get();
-                    } catch (ExecutionException e) {
-                        errors.addAndGet(1);
-                    }
-                    done.add(task.id);
-                } else {
-                    if (task.ready()) {
-                        futures.add(task.run().handle((ok, ex) -> {
-                            done.add(task.id);
-                            if (ex != null || !ok) errors.addAndGet(1);
-                            return ok;
-                        }));
-                    } else {
-                        postponed.offer(task);
-                    }
-                }
-                out.printf("\r%d/%d\t%d rps %d errors\t\t\t", done.size(), total,
-                    done.size() / max((System.nanoTime() - started) / 1000000000, 1), errors.get()
-                );
-            }
-        } catch (FileNotFoundException e) {
-            err.println("file not found data/tasks.jsonl");
-            e.printStackTrace();
-        } catch (IOException e) {
-            err.println("read error");
-            e.printStackTrace();
-        }
-        for (var f : futures) {
-            try {
-                f.get();
-            } catch (ExecutionException e) {
-            }
-            out.printf("\r%d/%d\t%d rps %d errors\t\t\t", done.size(), total,
-                    done.size() / max((System.nanoTime() - started) / 1000000000, 1), errors.get()
-            );
-        }
-        out.printf("\r%d/%d\t%d rps %d errors\t\t\t", done.size(), total,
-                done.size() / max((System.nanoTime() - started) / 1000000000, 1), errors.get()
-        );
-        while (!postponed.isEmpty()) {
-            var task = postponed.poll();
-            if (task.ready()) {
+    void run() {
+        try {
+            final long started = System.nanoTime();
+            var tasks = new ConcurrentLinkedQueue<Task>();
+            var input = new BufferedReader(new FileReader("data/tasks.jsonl"));
+            input.lines().forEach(l -> {
                 try {
-                    task.run().handle((ok, ex) -> {
-                        done.add(task.id);
-                        if (ex != null || !ok) errors.addAndGet(1);
-                        return ok;
-                    }).get();
-                } catch (ExecutionException e) {
+                    tasks.offer(new Task(l, done));
+                } catch (ParseException e) {
+                    err.println("error parsing " + l + ": " + e.getMessage());
                 }
-            } else {
-                postponed.offer(task);
+            });
+            var total = tasks.size();
+            var threads = Executors.newVirtualThreadPerTaskExecutor();
+            for (int i = 0; i < (sequential ? 1 : 100); i++) {
+                threads.submit(() -> {
+                    try {
+                        Socket connection = new Socket(InetAddress.getByName("localhost"), 8080);
+                        try {
+                            Task t;
+                            while ((t = tasks.poll()) != null) {
+                                if (connection.isClosed()) {
+                                    connection = new Socket(InetAddress.getByName("localhost"), 8080);
+                                }
+                                try {
+                                    while (!t.ready()) {
+                                        Thread.sleep(50);
+                                    }
+                                    if (!t.run(connection)) {
+                                        errors.addAndGet(1);
+                                        if (stopOnError) {
+                                            break;
+                                        }
+                                    }
+                                } catch (SocketException e) {
+                                    err.println("socket error " + e.getMessage());
+                                    connection.close();
+                                } catch (InterruptedException e) {
+                                    throw new RuntimeException(e);
+                                } finally {
+                                    done.add(t.id);
+                                }
+                            }
+                        } finally {
+                            try {
+                                connection.close();
+                            } catch (IOException e) {
+                                err.println("io error " + e.getMessage());
+                            }
+                        }
+                    } catch (IOException e) {
+                        err.println("io error " + e.getMessage());
+                    }
+                });
+            }
+            var prevTime = System.nanoTime();
+            var prevDone = done.size();
+            while (done.size() < total && (!stopOnError || errors.get() == 0)) {
+                var rps = (done.size() - prevDone) / max((System.nanoTime() - prevTime) / 1000000000, 1);
+                out.printf("\r%d/%d\t%d rps %d errors\t\t\t", done.size(), total, rps, errors.get());
+                prevTime = System.nanoTime();
+                prevDone = done.size();
+                Thread.sleep(200);
             }
             out.printf("\r%d/%d\t%d rps %d errors\t\t\t", done.size(), total,
-                done.size() / max((System.nanoTime() - started) / 1000000000, 1),
-                errors.get()
+                done.size() / max((System.nanoTime() - started) / 1000000000, 1), errors.get()
             );
+        } catch (Exception e) {
+            err.println("unhandled exception" + e.getMessage());
+            throw new RuntimeException(e);
         }
-        out.printf("%n\r%d requests sent in %.2f s, %d errors, %d rps%n",
-            done.size(), (System.nanoTime() - started) / 1000000000., errors.get(),
-            done.size() / max((System.nanoTime() - started) / 1000000000, 1));
-        client.shutdown();
     }
 
     static class Task {
         final int id;
-        final List<Integer> depends;
-        final HttpClient http;
+        final List<Integer> depends = new ArrayList<>();
         final Set<Integer> done;
-        final HttpRequest request;
         final long checkCode;
         final Optional<String> checkBody;
-        final Map<String, String> checkHeaders;
+        final Map<String, String> checkHeaders = new LinkedHashMap<>();
+        final String request;
+        final String body;
+        final Map<String, String> headers = new LinkedHashMap<>();
+        final Map<String, String> rsHeaders = new LinkedHashMap<>();
+        String statusLine, rsBody;
 
-        Task(String t, HttpClient client, Set<Integer> done) {
-            this.http = client;
+        Task(String t, Set<Integer> done) throws ParseException {
             this.done = done;
-            try {
-                var json = (JSONObject) new JSONParser().parse(t);
-                this.id = ((Long)json.get("id")).intValue();
-                this.depends = new ArrayList<>();
-                if (json.containsKey("dependsOn")) {
-                    var arr = (JSONArray)json.get("dependsOn");
-                    arr.forEach(v -> this.depends.add(((Long)v).intValue()));
+            var json = (JSONObject) new JSONParser().parse(t);
+            this.id = ((Long)json.get("id")).intValue();
+            if (json.containsKey("dependsOn")) {
+                var arr = (JSONArray)json.get("dependsOn");
+                arr.forEach(v -> this.depends.add(((Long)v).intValue()));
+            }
+            var headers = (JSONObject) json.get("headers");
+            assert headers != null;
+            headers.forEach((key, value) -> this.headers.put((String) key, (String) value));
+            this.request = (String) json.get("method") + " " + (String)json.get("path") + " HTTP/1.1\r\n";
+            if (!"GET".equals((String) json.get("method"))) {
+                this.body = (String) json.getOrDefault("body", "");
+            } else {
+                this.body = "";
+            }
+            var checks = (JSONObject) json.get("checks");
+            this.checkCode = (Long) checks.get("code");
+            if (checks.containsKey("headers")) {
+                headers = (JSONObject) checks.get("headers");
+                for (Map.Entry<String, Object> h : ((Map<String, Object>) headers).entrySet()) {
+                    this.checkHeaders.put(h.getKey(), (String)h.getValue());
                 }
-                var builder = HttpRequest.newBuilder().uri(URI.create("http://localhost:8080" + (String) json.get("path")));
-                var headers = (JSONObject) json.get("headers");
-                assert headers != null;
-                headers.forEach((key, value) -> builder.header((String) key, (String) value));
-                var method = (String) json.get("method");
-                if ("GET".equals(method)) {
-                    builder.GET();
-                } else {
-                    builder.method(method, HttpRequest.BodyPublishers.ofString((String) json.getOrDefault("body", "")));
-                }
-                this.request = builder.build();
-                var checks = (JSONObject) json.get("checks");
-                this.checkCode = (Long) checks.get("code");
-                this.checkHeaders = new HashMap<>();
-                if (checks.containsKey("headers")) {
-                    headers = (JSONObject) checks.get("headers");
-                    for (Map.Entry<String, Object> h : ((Map<String, Object>) headers).entrySet()) {
-                        this.checkHeaders.put(h.getKey(), (String)h.getValue());
+            }
+            if (checks.containsKey("jsonBody")) {
+                var jb = checks.get("jsonBody");
+                if (jb instanceof String) {
+                    this.checkBody = Optional.of("\"" + (String)jb + "\"");
+                } else if (jb instanceof JSONObject) {
+                    var o = (JSONObject)jb;
+                    var fields = "\"login\":\"" + o.get("login").toString() + "\"," +
+                        "\"name\":\"" + o.get("name").toString() + "\"," +
+                        "\"phone\":\"" + o.get("phone").toString() + "\"," +
+                        "\"country\":\"" + o.get("country").toString() + "\"";
+                    if (o.containsKey("is_admin")) {
+                        fields = fields + ",\"is_admin\":true";
                     }
-                }
-                if (checks.containsKey("jsonBody")) {
-                    var jb = checks.get("jsonBody");
-                    if (jb instanceof String)     this.checkBody = Optional.of("\"" + (String)jb + "\"");
-                    else if (jb instanceof JSONObject) this.checkBody = Optional.of(((JSONObject)jb).toJSONString());
-                    else this.checkBody = Optional.empty();
+                    this.checkBody = Optional.of("{" + fields + "}");
                 } else {
                     this.checkBody = Optional.empty();
                 }
-            } catch (ParseException e) {
-                throw new RuntimeException(e);
+            } else {
+                this.checkBody = Optional.empty();
             }
         }
 
@@ -165,39 +163,78 @@ public class Tasks {
             return depends.isEmpty() || done.containsAll(depends);
         }
 
-        CompletableFuture<Boolean> run() {
-            return http.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-                .thenApply(response -> {
-                    if (checkCode != response.statusCode()) {
-                        return error("invalid status code " + response.statusCode() + " expected " + checkCode);
+        boolean run(Socket connection) throws IOException {
+            write(connection);
+            read(connection);
+            if ("close".equals(rsHeaders.get("Connection"))) {
+                connection.close();
+            }
+            if (!statusLine.contains(Long.toString(checkCode))) {
+                return error("invalid status code, expected " + checkCode + " got " + statusLine);
+            }
+            for (var h : checkHeaders.entrySet()) {
+                if (!rsHeaders.containsKey(h.getKey())) {
+                    return error("no header " + h.getKey() + " in response");
+                }
+                var val = rsHeaders.get(h.getKey());
+                if (!val.equals(h.getValue())) {
+                    return error("invalid header " + h.getKey() + " value, expected \"" + h.getValue() + "\" got \"" + val + "\"");
+                }
+            }
+            if (checkBody.isPresent()) {
+                if (!checkBody.get().equals(rsBody)) {
+                    return error("invalid body, expected \"" + checkBody.get() + "\" got \"" + rsBody + "\"");
+                }
+            }
+            return true;
+        }
+
+        void write(Socket connection) throws IOException {
+            var writer = new PrintWriter(connection.getOutputStream());
+            try {
+                writer.print(request);
+                headers.forEach((k, v) -> writer.print(k + ": " + v + "\r\n"));
+                writer.print("Host: localhost\r\n");
+                writer.print("Content-Length: " + body.getBytes(StandardCharsets.UTF_8).length + "\r\n");
+                writer.print("Connection: keep-alive\r\n");
+                if (!body.isBlank()) {
+                    writer.print("Content-Type: application/json\r\n");
+                }
+                writer.print("\r\n");
+                if (!body.isBlank()) {
+                    writer.print(body);
+                }
+            } finally {
+                writer.flush();
+            }
+        }
+
+        void read(Socket connection) throws IOException {
+            var rs = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+            this.statusLine = rs.readLine();
+            String line;
+            do {
+                line = rs.readLine();
+                if (line != null && line.contains(":")) {
+                    var key = line.substring(0, line.indexOf(':')).trim();
+                    var value = line.substring(line.indexOf(':') + 1).trim();
+                    rsHeaders.put(key, value);
+                }
+            } while (line != null && !line.isBlank());
+            var len = Integer.parseInt(rsHeaders.getOrDefault("Content-Length", "0"));
+            var rsBody = new StringBuilder();
+            if (len > 0) {
+                var readLen = 0;
+                char[] buf = new char[512];
+                do {
+                    int n = rs.read(buf);
+                    if (n > 0) {
+                        rsBody.append(buf, 0, n);
+                        readLen += new String(buf, 0, n).getBytes(StandardCharsets.UTF_8).length;
                     }
-                    if (!checkBody.isEmpty()) {
-                        if (checkBody.get().startsWith("{")) {
-                            try {
-                                var expected = (JSONObject) new JSONParser().parse(checkBody.get());
-                                var actual = (JSONObject) new JSONParser().parse(response.body());
-                                for (Map.Entry<String, Object> h : ((Map<String, Object>) expected).entrySet()) {
-                                    Object exp = h.getValue();
-                                    Object act = actual.get(h.getKey());
-                                    if (act == null) {
-                                        return error("invalid response body, key \"" + h.getKey() + "\" is absent in response " + response.body());
-                                    }
-                                    if (exp instanceof String && act instanceof String && !((String) exp).equals((String) act)) {
-                                        return error("invalid response body, key \"" + h.getKey() + "\": \"" + exp + "\" does not match \"" + act + "\"");
-                                    }
-                                    if (exp instanceof Boolean && act instanceof Boolean && !((Boolean) exp).equals((Boolean) act)) {
-                                        return error("invalid response body, key \"" + h.getKey() + "\": \"" + exp + "\" does not match \"" + act + "\"");
-                                    }
-                                }
-                            } catch (ParseException e) {
-                                return error(e.getMessage());
-                            }
-                        } else if (!checkBody.get().equals(response.body())) {
-                            return error("invalid body \"" + response.body() + "\" expected \"" + checkBody.get() + "\"");
-                        }
-                    }
-                    return true;
-                });
+                } while (readLen < len);
+            }
+            this.rsBody = rsBody.toString();
         }
 
         boolean error(String message) {

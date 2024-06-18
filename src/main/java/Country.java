@@ -1,5 +1,3 @@
-package countries;
-
 import java.util.*;
 
 public enum Country {
@@ -256,10 +254,10 @@ public enum Country {
     SAINTHELENA("Saint Helena"),
     GREENLAND("Greenland");
 
-    static Map<String, Country> vals = new HashMap<>();
+    static Map<String, Country> values = new HashMap<>();
     static {
         for (var v : Country.values()) {
-            vals.put(v.name, v);
+            values.put(v.name, v);
         }
     }
 
@@ -270,6 +268,6 @@ public enum Country {
     }
 
     public static Country fromName(String name) {
-        return vals.getOrDefault(name, Country.NO);
+        return values.getOrDefault(name, Country.NO);
     }
 }

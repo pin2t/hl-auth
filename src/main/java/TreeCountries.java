@@ -1,5 +1,3 @@
-package countries;
-
 import java.util.*;
 
 public class TreeCountries {

@@ -22,7 +22,7 @@ highload.fun [Auth Server](https://highload.fun/timed_competitions/authserver) c
 ## How to test
 
 ```bash
-java -cp build/libs/auth-1.0.jar SimpleTasks
+java -cp build/libs/auth-1.0.jar Tasks
 ```
 
 This command runs all tasks from `data/tasks.jsonl` file on `localhost:8080` server 

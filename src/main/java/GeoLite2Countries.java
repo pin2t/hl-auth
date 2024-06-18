@@ -1,5 +1,3 @@
-package countries;
-
 import org.slf4j.*;
 
 import java.io.*;
@@ -8,8 +6,7 @@ import java.util.function.*;
 
 public class GeoLite2Countries {
     static final Logger log = LoggerFactory.getLogger(GeoLite2Countries.class);
-    final File ips;
-    final File locations;
+    final File ips, locations;
 
     public GeoLite2Countries(String ips, String locations) {
         this.ips = new File(ips);

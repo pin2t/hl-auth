@@ -1,4 +1,3 @@
-import countries.*;
 import org.junit.*;
 
 import static org.junit.Assert.assertEquals;
