@@ -46,10 +46,6 @@ class JLServer {
         }
     }
 
-    void stop() {
-        server.stop();
-    }
-
     int auth(HTTPServer.Request rq, HTTPServer.Response rs) throws IOException {
         try {
             var ip = IPRange.ip(rq.getHeaders().get(X_FORWARDED_FOR));

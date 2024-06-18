@@ -11,7 +11,7 @@ public class Server {
         new Server().run();
     }
 
-    void run() throws IOException {
+    void run() {
         ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor();
         pool.submit(users::load);
         pool.submit(() -> {
