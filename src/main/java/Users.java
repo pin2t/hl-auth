@@ -1,18 +1,16 @@
-import org.json.simple.*;
-import org.json.simple.parser.*;
 import org.slf4j.*;
 
 import java.io.*;
 import java.util.*;
 import java.util.concurrent.*;
 
-public class Users {
+class Users {
     static final Logger log = LoggerFactory.getLogger(Users.class);
 
     final Map<String, User> users = new ConcurrentHashMap<>();
     final String[] files;
 
-    public Users(String... files) {
+    Users(String... files) {
         this.files = files;
     }
 
@@ -28,17 +26,17 @@ public class Users {
                     users.put(user.login(), user);
                 });
             } catch (FileNotFoundException e) {
-                log.error("error loading users from " + name, e);
+                log.error("error loading users from {}", name, e);
             }
             log.info(String.format("Loaded %d users from %s in %.2f s", users.size() - prevSize, name, (System.nanoTime() - started) / 1000000000.));
         }
     }
 
-    public void put(String login, User user) {
+    void put(String login, User user) {
         users.put(login, user);
     }
 
-    public Optional<User> get(String login) {
+    Optional<User> get(String login) {
         return Optional.ofNullable(users.get(login));
     }
 }

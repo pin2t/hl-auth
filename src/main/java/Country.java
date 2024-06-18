@@ -254,7 +254,7 @@ enum Country {
     SAINTHELENA("Saint Helena"),
     GREENLAND("Greenland");
 
-    static Map<String, Country> values = new HashMap<>();
+    static final Map<String, Country> values = new HashMap<>();
     static {
         for (var v : Country.values()) {
             values.put(v.name, v);

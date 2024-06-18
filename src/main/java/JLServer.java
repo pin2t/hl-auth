@@ -277,7 +277,7 @@ class JLServer {
             }
             handler.handle(user.get());
         } catch (ParseException e) {
-            log.error("payload parse error: " + e.getMessage() + ", " + jwt.payload());
+            log.error("payload parse error: {}, {}", e.getMessage(), jwt.payload());
             rs.send(400, e.getMessage());
         }
     }

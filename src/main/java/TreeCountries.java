@@ -16,7 +16,7 @@ class TreeCountries {
             }
             node = node.children[bit];
         }
-        node.country = Optional.of(country);
+        node.country = country;
     }
 
     Country get(long ip) {
@@ -28,21 +28,19 @@ class TreeCountries {
                 return country;
             }
             node = node.children[bit];
-            if (node.country.isPresent()) {
-                country = node.country.get();
-            }
+            country = node.country;
         }
         return country;
     }
 
     static class Node {
-        static Node LEAF = new Node();
-        Node[] children;
-        Optional<Country> country;
+        static final Node LEAF = new Node();
+        final Node[] children;
+        Country country;
 
         Node() {
             this.children = new Node[]{LEAF, LEAF};
-            this.country = Optional.empty();
+            this.country = Country.NO;
         }
     }
 }

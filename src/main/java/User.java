@@ -2,7 +2,6 @@ import org.json.simple.*;
 import org.json.simple.parser.*;
 
 class User {
-    static final String PASSWORD = "password";
     static final String LOGIN = "login";
     static final String PASSWORD_PREF = "\"password\":";
     static final String COUNTRY_PREF = "\"country\":";

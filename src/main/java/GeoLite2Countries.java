@@ -28,7 +28,7 @@ class GeoLite2Countries {
                         var name = fields.get(5);
                         ids.put(fields.get(0), name);
                     } catch (Exception e) {
-                        log.error("error parsing " + line, e);
+                        log.error("error parsing {}", line, e);
                     }
                 });
             }
@@ -45,7 +45,7 @@ class GeoLite2Countries {
                         action.accept(new IPRange(fields.get(0)), Country.fromName(name));
                         count[0]++;
                     } catch (Exception e) {
-                        log.error("error parsing " + line, e);
+                        log.error("error parsing {}", line, e);
                     }
                 });
             }

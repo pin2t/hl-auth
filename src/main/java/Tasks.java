@@ -26,6 +26,7 @@ public class Tasks {
         this.stopOnError = Arrays.asList(args).contains("-stop");
     }
 
+    @SuppressWarnings("BusyWait")
     void run() {
         try {
             final long started = System.nanoTime();
@@ -104,7 +105,7 @@ public class Tasks {
         final List<Integer> depends = new ArrayList<>();
         final Set<Integer> done;
         final long checkCode;
-        final Optional<String> checkBody;
+        final String checkBody;
         final Map<String, String> checkHeaders = new LinkedHashMap<>();
         final String request;
         final String body;
@@ -123,8 +124,8 @@ public class Tasks {
             var headers = (JSONObject) json.get("headers");
             assert headers != null;
             headers.forEach((key, value) -> this.headers.put((String) key, (String) value));
-            this.request = (String) json.get("method") + " " + (String)json.get("path") + " HTTP/1.1\r\n";
-            if (!"GET".equals((String) json.get("method"))) {
+            this.request = json.get("method") + " " + (String)json.get("path") + " HTTP/1.1\r\n";
+            if (!"GET".equals(json.get("method"))) {
                 this.body = (String) json.getOrDefault("body", "");
             } else {
                 this.body = "";
@@ -140,9 +141,8 @@ public class Tasks {
             if (checks.containsKey("jsonBody")) {
                 var jb = checks.get("jsonBody");
                 if (jb instanceof String) {
-                    this.checkBody = Optional.of("\"" + (String)jb + "\"");
-                } else if (jb instanceof JSONObject) {
-                    var o = (JSONObject)jb;
+                    this.checkBody = "\"" + jb + "\"";
+                } else if (jb instanceof JSONObject o) {
                     var fields = "\"login\":\"" + o.get("login").toString() + "\"," +
                         "\"name\":\"" + o.get("name").toString() + "\"," +
                         "\"phone\":\"" + o.get("phone").toString() + "\"," +
@@ -150,12 +150,12 @@ public class Tasks {
                     if (o.containsKey("is_admin")) {
                         fields = fields + ",\"is_admin\":true";
                     }
-                    this.checkBody = Optional.of("{" + fields + "}");
+                    this.checkBody = "{" + fields + "}";
                 } else {
-                    this.checkBody = Optional.empty();
+                    this.checkBody = "";
                 }
             } else {
-                this.checkBody = Optional.empty();
+                this.checkBody = "";
             }
         }
 
@@ -181,10 +181,8 @@ public class Tasks {
                     return error("invalid header " + h.getKey() + " value, expected \"" + h.getValue() + "\" got \"" + val + "\"");
                 }
             }
-            if (checkBody.isPresent()) {
-                if (!checkBody.get().equals(rsBody)) {
-                    return error("invalid body, expected \"" + checkBody.get() + "\" got \"" + rsBody + "\"");
-                }
+            if (!checkBody.isEmpty() && !checkBody.equals(rsBody)) {
+                return error("invalid body, expected \"" + checkBody + "\" got \"" + rsBody + "\"");
             }
             return true;
         }

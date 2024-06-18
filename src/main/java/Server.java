@@ -16,9 +16,9 @@ public class Server {
         pool.submit(users::load);
         pool.submit(() -> {
             var geolite = new GeoLite2Countries("/storage/data/GeoLite2-City-CSV/GeoLite2-City-Blocks-IPv4.csv", "/storage/data/GeoLite2-City-CSV/GeoLite2-City-Locations-en.csv");
-            geolite.forEach((range, country) -> countries.put(range, country));
+            geolite.forEach(countries::put);
             geolite = new GeoLite2Countries("data/GeoLite2-City-CSV/GeoLite2-City-Blocks-IPv4.csv", "data/GeoLite2-City-CSV/GeoLite2-City-Locations-en.csv");
-            geolite.forEach((range, country) -> countries.put(range, country));
+            geolite.forEach(countries::put);
         });
 //        var server = new JavalinServer(users, countries);
         var server = new JLServer(users, countries, pool);
