@@ -3,7 +3,7 @@ import com.auth0.jwt.exceptions.*;
 
 import java.util.*;
 
-public class JWT {
+class JWT {
     static final String HEADER = "{\"alg\":\"HS256\",\"typ\":\"JWT\"}";
     static final Algorithm hs256 = Algorithm.HMAC256(Base64.getDecoder().decode("CGWpjarkRIXzCIIw5vXKc+uESy5ebrbOyVMZvftj19k="));
     static final String LOGIN = "{\"login\":\"";
@@ -12,7 +12,7 @@ public class JWT {
     final String token, payload;
 
     JWT(String login, String nonce) {
-        this.payload = new StringBuilder(128).append(LOGIN).append(login).append(NONCE).append(nonce).append(STR).toString();
+        this.payload = LOGIN + login + NONCE + nonce + STR;
         this.token = com.auth0.jwt.JWT.create().withHeader(HEADER).withPayload(payload).sign(hs256);
     }
 

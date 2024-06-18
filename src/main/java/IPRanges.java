@@ -1,14 +1,10 @@
 import java.util.*;
 import java.util.concurrent.*;
 
-public class IPRanges {
+class IPRanges {
     final Set<IPRange> ranges = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
-    public IPRanges() {
-    }
-
-    public IPRanges(IPRange... initial) {
-        ranges.addAll(Arrays.asList(initial));
+    IPRanges() {
     }
 
     boolean contains(long ip) {
@@ -25,9 +21,5 @@ public class IPRanges {
 
     void remove(String ip, String mask) {
         ranges.remove(new IPRange(ip + "/" + mask));
-    }
-
-    void merge(IPRanges other) {
-        this.ranges.addAll(other.ranges);
     }
 }

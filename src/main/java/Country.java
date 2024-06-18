@@ -1,6 +1,6 @@
 import java.util.*;
 
-public enum Country {
+enum Country {
     NO(""),
     PAPUA_NEW_GUINEA("Papua New Guinea"),
     CAMBODIA("Cambodia"),
@@ -261,13 +261,13 @@ public enum Country {
         }
     }
 
-    public final String name;
+    final String name;
 
     Country(String name) {
         this.name = name;
     }
 
-    public static Country fromName(String name) {
+    static Country fromName(String name) {
         return values.getOrDefault(name, Country.NO);
     }
 }

@@ -1,17 +1,17 @@
-public class JSONString {
+class JSONString {
     final String json;
 
-    public JSONString(String json) {
+    JSONString(String json) {
         this.json = json;
     }
 
-    public String field(String prefix) {
+    String field(String prefix) {
         var i = json.indexOf(prefix);
         var j = json.indexOf('\"', i + prefix.length() + 1);
         return json.substring(i + prefix.length() + 1, j);
     }
 
-    public Pair<JSONString, String> remove(String prefix) {
+    Pair<JSONString, String> remove(String prefix) {
         var i = json.indexOf(prefix);
         if (i < 0) {
             return new Pair<>(this, "");
@@ -21,7 +21,7 @@ public class JSONString {
         return new Pair<>(new JSONString(json.substring(0, i) + json.substring(j + 2)), val);
     }
 
-    public Pair<JSONString, String> removeBoolean(String prefix) {
+    Pair<JSONString, String> removeBoolean(String prefix) {
         var i = json.indexOf(prefix);
         if (i < 0) {
             return new Pair<>(this, "");
@@ -33,5 +33,5 @@ public class JSONString {
         }
     }
 
-    public String toJSON() { return json; }
+    String toJSON() { return json; }
 }

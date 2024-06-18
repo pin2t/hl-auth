@@ -14,7 +14,7 @@ Then run auth server in a docker container
 ```bash
 gradle jar
 docker build . -t auth
-docker run --rm -p 8080:8080 -v "/Users/pin/hl-auth/data:/storage/data" -m 8g --cpus=2 -t auth
+docker run --rm -p 8080:8080 -v "${PWD}/data:/storage/data" -m 8g --cpus=2 -t auth
 ```
 
 highload.fun [Auth Server](https://highload.fun/timed_competitions/authserver) competition has a limitation for 2 gigabytes of memory but Java solution is not fit at all. JVM has just so much overhead (JIT, GC, VM)

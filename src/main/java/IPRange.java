@@ -1,10 +1,10 @@
 import java.util.*;
 
-public class IPRange {
+class IPRange {
     final long first, last;
     final int mask;
 
-    public IPRange(String network) {
+    IPRange(String network) {
         var slash = network.indexOf('/');
         assert slash > 0;
         var ip = ip(network.substring(0, slash));
@@ -17,7 +17,7 @@ public class IPRange {
         this.last = last;
     }
 
-    public boolean contains(long ip) {
+    boolean contains(long ip) {
         return ip >= first && ip <= last;
     }
 
@@ -34,7 +34,7 @@ public class IPRange {
         return Objects.hash(first, last);
     }
 
-    public static long ip(String s) {
+    static long ip(String s) {
         long result = 0;
         int p = 0, j = 0;
         for (int i = 0; i < s.length(); i++) {

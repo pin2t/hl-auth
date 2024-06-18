@@ -1,13 +1,13 @@
 import java.util.*;
 
-public class TreeCountries {
+class TreeCountries {
     final Node root;
 
-    public TreeCountries() {
+    TreeCountries() {
         this.root = new Node();
     }
 
-    public void put(IPRange range, Country country) {
+    void put(IPRange range, Country country) {
         var node = root;
         for (int i = 31; i >= (32 - range.mask); i--) {
             int bit = (int)(range.first >> i) & 1;
@@ -19,7 +19,7 @@ public class TreeCountries {
         node.country = Optional.of(country);
     }
 
-    public Country get(long ip) {
+    Country get(long ip) {
         var country = Country.NO;
         var node = root;
         for (int i = 31; i >= 0; i--) {

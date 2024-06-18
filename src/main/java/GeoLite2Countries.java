@@ -4,16 +4,16 @@ import java.io.*;
 import java.util.*;
 import java.util.function.*;
 
-public class GeoLite2Countries {
+class GeoLite2Countries {
     static final Logger log = LoggerFactory.getLogger(GeoLite2Countries.class);
     final File ips, locations;
 
-    public GeoLite2Countries(String ips, String locations) {
+    GeoLite2Countries(String ips, String locations) {
         this.ips = new File(ips);
         this.locations = new File(locations);
     }
 
-    public void forEach(BiConsumer<IPRange, Country> action) {
+    void forEach(BiConsumer<IPRange, Country> action) {
         if (!ips.exists() || !locations.exists()) {
             return;
         }

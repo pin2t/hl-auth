@@ -1,7 +1,7 @@
 import org.json.simple.*;
 import org.json.simple.parser.*;
 
-public class User {
+class User {
     static final String PASSWORD = "password";
     static final String LOGIN = "login";
     static final String PASSWORD_PREF = "\"password\":";
@@ -13,7 +13,7 @@ public class User {
     final Country country;
     final boolean isAdmin;
 
-    public User(String json) {
+    User(String json) {
         var js = new JSONString(json);
         var phash = js.remove(PASSWORD_PREF);
         this.passwordHash = phash.second().hashCode();
@@ -27,7 +27,7 @@ public class User {
         }
     }
 
-    public User(User user, String patch) throws ParseException {
+    User(User user, String patch) throws ParseException {
         var parser = new JSONParser();
         var opatch = (JSONObject)parser.parse(patch);
         opatch.remove("is_admin");

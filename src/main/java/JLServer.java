@@ -7,7 +7,7 @@ import java.io.*;
 import java.util.*;
 import java.util.concurrent.*;
 
-public class JLServer {
+class JLServer {
     static final Logger log = LoggerFactory.getLogger(JLServer.class);
     static final String X_FORWARDED_FOR = "X-FORWARDED-FOR";
     static final String X_API_KEY = "X-API-Key";
