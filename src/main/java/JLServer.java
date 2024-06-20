@@ -1,5 +1,4 @@
 import net.freeutils.httpserver.*;
-import org.json.simple.*;
 import org.json.simple.parser.*;
 import org.slf4j.*;
 
@@ -16,7 +15,7 @@ class JLServer {
     static final String NONCE = "\"nonce\":";
     final Users users;
     final Set<String> blacklisted = Collections.newSetFromMap(new ConcurrentHashMap<>());
-    final IPRanges blacklistedIPs = new IPRanges();
+    final TreeRanges blacklistedIPs = new TreeRanges();
     final TreeCountries countries;
     final ExecutorService pool;
     final HTTPServer server;
@@ -129,11 +128,12 @@ class JLServer {
             var items = rq.getPath().split("/");
             var ip = items[3];
             var mask = items[4];
-            if (blacklistedIPs.contains(ip, mask)) {
+            var range = new IPRange(ip + "/" + mask);
+            if (blacklistedIPs.contains(range)) {
                 rs.send(409, "");
                 return;
             }
-            blacklistedIPs.add(ip, mask);
+            blacklistedIPs.add(range);
             rs.send(201, "");
         });
         return 0;
@@ -144,11 +144,12 @@ class JLServer {
             var items = rq.getPath().split("/");
             var ip = items[3];
             var mask = items[4];
-            if (!blacklistedIPs.contains(ip, mask)) {
+            var range = new IPRange(ip + "/" + mask);
+            if (!blacklistedIPs.contains(range)) {
                 rs.send(404, "");
                 return;
             }
-            blacklistedIPs.remove(ip, mask);
+            blacklistedIPs.remove(range);
             rs.send(204, "");
         });
         return 0;
@@ -163,8 +164,7 @@ class JLServer {
                 rs.send(404, "");
                 return;
             }
-            var ip = IPRange.ip(rq.getHeaders().get(X_FORWARDED_FOR));
-            if (blacklistedIPs.contains(ip)) {
+            if (blacklistedIPs.contains(IPRange.ip(rq.getHeaders().get(X_FORWARDED_FOR)))) {
                 rs.send(409, "");
                 return;
             }
@@ -211,31 +211,27 @@ class JLServer {
             rs.send(403, "");
             return;
         }
-        try {
-            var json = (JSONObject) new JSONParser().parse(jwt.payload());
-            var login = (String)json.get(User.LOGIN);
-            if (blacklisted.contains(login)) {
-                rs.send(403, "");
-                return;
-            }
-            var admin = users.get(login);
-            if (admin.isEmpty()) {
-                rs.send(403, "");
-                return;
-            }
-            if (!admin.get().isAdmin()) {
-                rs.send(403, "");
-                return;
-            }
-            var country = countries.get(ip);
-            if (country != admin.get().country()) {
-                rs.send(403, "");
-                return;
-            }
-            handler.handle(admin.get());
-        } catch (ParseException e) {
-            rs.send(400, e.getMessage());
+        var json = new JSONString((jwt.payload()));
+        var login = (String)json.field(User.LOGIN_PREF);
+        if (blacklisted.contains(login)) {
+            rs.send(403, "");
+            return;
         }
+        var admin = users.get(login);
+        if (admin.isEmpty()) {
+            rs.send(403, "");
+            return;
+        }
+        if (!admin.get().isAdmin()) {
+            rs.send(403, "");
+            return;
+        }
+        var country = countries.get(ip);
+        if (country != admin.get().country()) {
+            rs.send(403, "");
+            return;
+        }
+        handler.handle(admin.get());
     }
 
     void byUser(HTTPServer.Request rq, HTTPServer.Response rs, UserHandler handler) throws IOException {
@@ -254,28 +250,23 @@ class JLServer {
             rs.send(403, "");
             return;
         }
-        try {
-            var json = (JSONObject) new JSONParser().parse(jwt.payload());
-            var login = (String)json.get(User.LOGIN);
-            if (blacklisted.contains(login)) {
-                rs.send(403, "");
-                return;
-            }
-            var user = users.get(login);
-            if (user.isEmpty()) {
-                rs.send(403, "");
-                return;
-            }
-            var country = countries.get(ip);
-            if (country != user.get().country()) {
-                rs.send(403, "");
-                return;
-            }
-            handler.handle(user.get());
-        } catch (ParseException e) {
-            log.error("payload parse error: {}, {}", e.getMessage(), jwt.payload());
-            rs.send(400, e.getMessage());
+        var json = new JSONString((jwt.payload()));
+        var login = (String)json.field(User.LOGIN_PREF);
+        if (blacklisted.contains(login)) {
+            rs.send(403, "");
+            return;
         }
+        var user = users.get(login);
+        if (user.isEmpty()) {
+            rs.send(403, "");
+            return;
+        }
+        var country = countries.get(ip);
+        if (country != user.get().country()) {
+            rs.send(403, "");
+            return;
+        }
+        handler.handle(user.get());
     }
 
     interface UserHandler {

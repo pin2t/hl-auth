@@ -91,7 +91,7 @@ public class Tasks {
                 prevDone = done.size();
                 Thread.sleep(200);
             }
-            out.printf("\r%d/%d\t%d rps %d errors\t\t\t", done.size(), total,
+            out.printf("\r%d/%d\t%d rps %d errors\t\t\t\n", done.size(), total,
                 done.size() / max((System.nanoTime() - started) / 1000000000, 1), errors.get()
             );
         } catch (Exception e) {
@@ -125,18 +125,15 @@ public class Tasks {
             assert headers != null;
             headers.forEach((key, value) -> this.headers.put((String) key, (String) value));
             this.request = json.get("method") + " " + (String)json.get("path") + " HTTP/1.1\r\n";
-            if (!"GET".equals(json.get("method"))) {
+            if (!"GET".equals(json.get("method")))
                 this.body = (String) json.getOrDefault("body", "");
-            } else {
+            else
                 this.body = "";
-            }
             var checks = (JSONObject) json.get("checks");
             this.checkCode = (Long) checks.get("code");
             if (checks.containsKey("headers")) {
                 headers = (JSONObject) checks.get("headers");
-                for (Map.Entry<String, Object> h : ((Map<String, Object>) headers).entrySet()) {
-                    this.checkHeaders.put(h.getKey(), (String)h.getValue());
-                }
+                ((Map<String, Object>) headers).forEach((key, value) -> this.checkHeaders.put(key, (String) value));
             }
             if (checks.containsKey("jsonBody")) {
                 var jb = checks.get("jsonBody");
