@@ -11,11 +11,12 @@ import java.util.concurrent.atomic.*;
 import static java.lang.Math.max;
 import static java.lang.System.err;
 import static java.lang.System.out;
+import static java.lang.Thread.sleep;
 
 public class Tasks {
     final boolean stopOnError, sequential;
-    final Set<Integer> done = Collections.newSetFromMap(new ConcurrentHashMap<>());
-    final AtomicLong errors = new AtomicLong();
+    final Set<Integer> done;
+    final AtomicLong errors;
 
     public static void main(String[] args) {
         new Tasks(args).run();
@@ -24,6 +25,8 @@ public class Tasks {
     Tasks(String[] args) {
         this.sequential = Arrays.asList(args).contains("-seq");
         this.stopOnError = Arrays.asList(args).contains("-stop");
+        this.done = Collections.newSetFromMap(new ConcurrentHashMap<>());
+        this.errors = new AtomicLong();
     }
 
     @SuppressWarnings("BusyWait")
@@ -32,15 +35,31 @@ public class Tasks {
             final long started = System.nanoTime();
             var tasks = new ConcurrentLinkedQueue<Task>();
             var input = new BufferedReader(new FileReader("data/tasks.jsonl"));
+            var threads = Executors.newVirtualThreadPerTaskExecutor();
+            var batch = new ArrayList<String>();
+            var total = new int[]{0};
+            var drain = (Runnable) () -> {
+                var _batch = new ArrayList<>(batch);
+                total[0] += batch.size();
+                batch.clear();
+                threads.submit(() -> {
+                    for (var ll : _batch) {
+                        try {
+                            tasks.offer(new Task(ll, done));
+                        } catch (ParseException e) {
+                            err.println("error parsing " + ll + ": " + e.getMessage());
+                        }
+                    }
+                });
+            };
             input.lines().forEach(l -> {
-                try {
-                    tasks.offer(new Task(l, done));
-                } catch (ParseException e) {
-                    err.println("error parsing " + l + ": " + e.getMessage());
+                batch.add(l);
+                if (batch.size() >= 1000) {
+                    drain.run();
                 }
             });
-            var total = tasks.size();
-            var threads = Executors.newVirtualThreadPerTaskExecutor();
+            drain.run();
+            while (tasks.size() < total[0]) { sleep(200); }
             for (int i = 0; i < (sequential ? 1 : 100); i++) {
                 threads.submit(() -> {
                     try {
@@ -53,9 +72,10 @@ public class Tasks {
                                 }
                                 try {
                                     while (!t.ready()) {
-                                        Thread.sleep(50);
+                                        sleep(50);
                                     }
-                                    if (!t.run(connection)) {
+                                    t.run(connection);
+                                    if (!t.succeeded()) {
                                         errors.addAndGet(1);
                                         if (stopOnError) {
                                             break;
@@ -84,14 +104,14 @@ public class Tasks {
             }
             var prevTime = System.nanoTime();
             var prevDone = done.size();
-            while (done.size() < total && (!stopOnError || errors.get() == 0)) {
+            while (done.size() < total[0] && (!stopOnError || errors.get() == 0)) {
                 var rps = (done.size() - prevDone) / max((System.nanoTime() - prevTime) / 1000000000, 1);
-                out.printf("\r%d/%d\t%d rps %d errors\t\t\t", done.size(), total, rps, errors.get());
+                out.printf("\r%d/%d\t%d rps %d errors\t\t\t", done.size(), total[0], rps, errors.get());
                 prevTime = System.nanoTime();
                 prevDone = done.size();
-                Thread.sleep(200);
+                sleep(200);
             }
-            out.printf("\r%d/%d\t%d rps %d errors\t\t\t\n", done.size(), total,
+            out.printf("\r%d/%d\t%d rps %d errors\t\t\t\n", done.size(), total[0],
                 done.size() / max((System.nanoTime() - started) / 1000000000, 1), errors.get()
             );
         } catch (Exception e) {
@@ -119,7 +139,9 @@ public class Tasks {
             this.id = ((Long)json.get("id")).intValue();
             if (json.containsKey("dependsOn")) {
                 var arr = (JSONArray)json.get("dependsOn");
-                arr.forEach(v -> this.depends.add(((Long)v).intValue()));
+                for (Object v : arr) {
+                    this.depends.add(((Long)v).intValue());
+                }
             }
             var headers = (JSONObject) json.get("headers");
             assert headers != null;
@@ -135,10 +157,11 @@ public class Tasks {
                 headers = (JSONObject) checks.get("headers");
                 ((Map<String, Object>) headers).forEach((key, value) -> this.checkHeaders.put(key, (String) value));
             }
+            var checkBody = "";
             if (checks.containsKey("jsonBody")) {
                 var jb = checks.get("jsonBody");
                 if (jb instanceof String) {
-                    this.checkBody = "\"" + jb + "\"";
+                    checkBody = "\"" + jb + "\"";
                 } else if (jb instanceof JSONObject o) {
                     var fields = "\"login\":\"" + o.get("login").toString() + "\"," +
                         "\"name\":\"" + o.get("name").toString() + "\"," +
@@ -147,48 +170,31 @@ public class Tasks {
                     if (o.containsKey("is_admin")) {
                         fields = fields + ",\"is_admin\":true";
                     }
-                    this.checkBody = "{" + fields + "}";
-                } else {
-                    this.checkBody = "";
+                    checkBody = "{" + fields + "}";
                 }
-            } else {
-                this.checkBody = "";
             }
+            this.checkBody = checkBody;
         }
 
         boolean ready() {
             return depends.isEmpty() || done.containsAll(depends);
         }
 
-        boolean run(Socket connection) throws IOException {
+        void run(Socket connection) throws IOException {
             write(connection);
             read(connection);
             if ("close".equals(rsHeaders.get("Connection"))) {
                 connection.close();
             }
-            if (!statusLine.contains(Long.toString(checkCode))) {
-                return error("invalid status code, expected " + checkCode + " got " + statusLine);
-            }
-            for (var h : checkHeaders.entrySet()) {
-                if (!rsHeaders.containsKey(h.getKey())) {
-                    return error("no header " + h.getKey() + " in response");
-                }
-                var val = rsHeaders.get(h.getKey());
-                if (!val.equals(h.getValue())) {
-                    return error("invalid header " + h.getKey() + " value, expected \"" + h.getValue() + "\" got \"" + val + "\"");
-                }
-            }
-            if (!checkBody.isEmpty() && !checkBody.equals(rsBody)) {
-                return error("invalid body, expected \"" + checkBody + "\" got \"" + rsBody + "\"");
-            }
-            return true;
         }
 
         void write(Socket connection) throws IOException {
-            var writer = new PrintWriter(connection.getOutputStream());
+            var writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(connection.getOutputStream())));
             try {
                 writer.print(request);
-                headers.forEach((k, v) -> writer.print(k + ": " + v + "\r\n"));
+                for (var h : headers.entrySet()) {
+                    writer.print(h.getKey() + ": " + h.getValue() + "\r\n");
+                }
                 writer.print("Host: localhost\r\n");
                 writer.print("Content-Length: " + body.getBytes(StandardCharsets.UTF_8).length + "\r\n");
                 writer.print("Connection: keep-alive\r\n");
@@ -230,6 +236,25 @@ public class Tasks {
                 } while (readLen < len);
             }
             this.rsBody = rsBody.toString();
+        }
+
+        boolean succeeded() {
+            if (!statusLine.contains(Long.toString(checkCode))) {
+                return error("invalid status code, expected " + checkCode + " got " + statusLine);
+            }
+            for (var h : checkHeaders.entrySet()) {
+                if (!rsHeaders.containsKey(h.getKey())) {
+                    return error("no header " + h.getKey() + " in response");
+                }
+                var val = rsHeaders.get(h.getKey());
+                if (!val.equals(h.getValue())) {
+                    return error("invalid header " + h.getKey() + " value, expected \"" + h.getValue() + "\" got \"" + val + "\"");
+                }
+            }
+            if (!checkBody.isEmpty() && !checkBody.equals(rsBody)) {
+                return error("invalid body, expected \"" + checkBody + "\" got \"" + rsBody + "\"");
+            }
+            return true;
         }
 
         boolean error(String message) {

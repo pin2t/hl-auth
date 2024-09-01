@@ -39,6 +39,7 @@ class JLServer {
             host.addContext("/blacklist/subnet", this::unblockSubnet, "DELETE");
             host.addContext("/blacklist/user", this::blockUser, "PUT");
             host.addContext("/blacklist/user", this::unblockUser, "DELETE");
+            host.addContext("/echo", this::echo, "POST");
             server.start();
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -192,6 +193,13 @@ class JLServer {
             }
             rs.send(204, "");
         });
+        return 0;
+    }
+
+    int echo(HTTPServer.Request rq, HTTPServer.Response rs) throws IOException {
+        var data = new StringWriter();
+        new InputStreamReader(rq.getBody()).transferTo(data);
+        rs.send(200, data.toString());
         return 0;
     }
 
